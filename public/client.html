@@ -210,23 +210,17 @@
                 createPeerConnection();
 
                 // Join room
-                if (ws.readyState === WebSocket.OPEN) {
-                    // WebSocket is ready, send join message
-                    ws.send(JSON.stringify({
-                        type: 'join',
-                        room: room
-                    }));
-                    addLog('Joined room: ' + room);
-                } else {
-                    // Queue the join message to be sent when connection opens
-                    ws.addEventListener('open', () => {
-                        ws.send(JSON.stringify({
-                            type: 'join',
-                            room: room
-                        }));
-                        addLog('Joined room: ' + room);
-                    });
-                }
+                ws.send(JSON.stringify({
+                    type: 'join',
+                    room: room
+                }));
+                addLog('Joined room: ' + room);
+                // Create and send offer
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                sendSignal(offer);
+                addLog('Created and sent connection offer');
+                document.getElementById('hangupButton').disabled = false;
             } catch (err) {
                 addLog('Error: ' + err.message);
                 updateConnectionStatus('disconnected', 'Connection failed');
@@ -272,17 +266,11 @@
         }
 
         function sendSignal(signal) {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'signal',
-                    room: room,
-                    signal: signal
-                }));
-            } else {
-                addLog('Warning: Cannot send signal - WebSocket not connected');
-                updateConnectionStatus('disconnected', 'Connection failed - please try again');
-                document.getElementById('startButton').disabled = false;
-            }
+            ws.send(JSON.stringify({
+                type: 'signal',
+                room: room,
+                signal: signal
+            }));
         }
 
         // Handle incoming signals
@@ -327,11 +315,10 @@
             updateConnectionStatus('ready', 'Ready to connect');
         };
 
-        ws.onerror = (error) => {
-            addLog('WebSocket error: ' + error.message);
-            updateConnectionStatus('disconnected', 'Connection failed');
-            document.getElementById('startButton').disabled = false;
-        };
+        ws.onclose = () => {
+            addLog('Disconnected from signaling server');
+            updateConnectionStatus('disconnected', 'Signaling server disconnected');
+        }
 
         function hangup() {
             addLog('Ending call');
