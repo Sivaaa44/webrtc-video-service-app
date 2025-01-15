@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>WebRTC Video Chat</title>
     <style>
@@ -16,7 +17,7 @@
             padding: 15px;
             border-radius: 8px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .video-container {
@@ -34,7 +35,7 @@
             position: absolute;
             top: 10px;
             left: 10px;
-            background-color: rgba(0,0,0,0.5);
+            background-color: rgba(0, 0, 0, 0.5);
             color: white;
             padding: 5px 10px;
             border-radius: 4px;
@@ -45,7 +46,7 @@
             max-width: 600px;
             border-radius: 8px;
             background-color: #333;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .controls {
@@ -54,7 +55,7 @@
             border-radius: 8px;
             margin: 20px 0;
             text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         button {
@@ -92,7 +93,7 @@
             margin-top: 20px;
             max-height: 200px;
             overflow-y: auto;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .log-entry {
@@ -125,6 +126,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="room-info">
         <h2>WebRTC Video Chat</h2>
@@ -159,11 +161,9 @@
     </div>
 
     <script>
-        // Generate a random room ID if not provided
         const generateRoomId = () => Math.random().toString(36).substring(7);
         const room = new URLSearchParams(window.location.search).get('room') || generateRoomId();
-        
-        // Update UI with room information
+
         document.getElementById('roomDisplay').textContent = room;
         const shareUrl = `${window.location.origin}${window.location.pathname}?room=${room}`;
         document.getElementById('shareUrl').textContent = shareUrl;
@@ -178,7 +178,6 @@
             ]
         };
 
-        // Logging function
         function addLog(message) {
             const logContainer = document.getElementById('logContainer');
             const logEntry = document.createElement('div');
@@ -187,7 +186,6 @@
             logContainer.insertBefore(logEntry, logContainer.firstChild);
         }
 
-        // Update connection status
         function updateConnectionStatus(status, message) {
             const statusDiv = document.getElementById('connectionStatus');
             statusDiv.className = `connection-status status-${status}`;
@@ -212,19 +210,23 @@
                 createPeerConnection();
 
                 // Join room
-                ws.send(JSON.stringify({
-                    type: 'join',
-                    room: room
-                }));
-                addLog('Joined room: ' + room);
-
-                // Create and send offer
-                const offer = await peerConnection.createOffer();
-                await peerConnection.setLocalDescription(offer);
-                sendSignal(offer);
-                addLog('Created and sent connection offer');
-
-                document.getElementById('hangupButton').disabled = false;
+                if (ws.readyState === WebSocket.OPEN) {
+                    // WebSocket is ready, send join message
+                    ws.send(JSON.stringify({
+                        type: 'join',
+                        room: room
+                    }));
+                    addLog('Joined room: ' + room);
+                } else {
+                    // Queue the join message to be sent when connection opens
+                    ws.addEventListener('open', () => {
+                        ws.send(JSON.stringify({
+                            type: 'join',
+                            room: room
+                        }));
+                        addLog('Joined room: ' + room);
+                    });
+                }
             } catch (err) {
                 addLog('Error: ' + err.message);
                 updateConnectionStatus('disconnected', 'Connection failed');
@@ -270,19 +272,25 @@
         }
 
         function sendSignal(signal) {
-            ws.send(JSON.stringify({
-                type: 'signal',
-                room: room,
-                signal: signal
-            }));
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'signal',
+                    room: room,
+                    signal: signal
+                }));
+            } else {
+                addLog('Warning: Cannot send signal - WebSocket not connected');
+                updateConnectionStatus('disconnected', 'Connection failed - please try again');
+                document.getElementById('startButton').disabled = false;
+            }
         }
 
         // Handle incoming signals
         ws.onmessage = async (event) => {
             const data = JSON.parse(event.data);
-            
+
             if (data.type === 'roomStatus') {
-                document.getElementById('participantCount').textContent = 
+                document.getElementById('participantCount').textContent =
                     `Participants: ${data.participants}`;
                 return;
             }
@@ -298,7 +306,7 @@
                     await peerConnection.setLocalDescription(answer);
                     sendSignal(answer);
                     addLog('Sent connection answer');
-                } 
+                }
                 else if (data.type === 'answer') {
                     addLog('Received connection answer');
                     await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
@@ -316,11 +324,13 @@
         ws.onopen = () => {
             addLog('Connected to signaling server');
             document.getElementById('startButton').disabled = false;
+            updateConnectionStatus('ready', 'Ready to connect');
         };
 
-        ws.onclose = () => {
-            addLog('Disconnected from signaling server');
-            updateConnectionStatus('disconnected', 'Signaling server disconnected');
+        ws.onerror = (error) => {
+            addLog('WebSocket error: ' + error.message);
+            updateConnectionStatus('disconnected', 'Connection failed');
+            document.getElementById('startButton').disabled = false;
         };
 
         function hangup() {
@@ -343,4 +353,5 @@
         document.getElementById('hangupButton').onclick = hangup;
     </script>
 </body>
+
 </html>
