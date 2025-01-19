@@ -432,15 +432,15 @@
         //     addLog('Saved remote recording');
         // }
 
-        let localChunks = []; // Was incorrectly named localChunk
-        let remoteChunks = []; // Was incorrectly named remoteChunk
+        let localChunks = [];
+        let remoteChunks = [];
         let localRecorder, remoteRecorder;
 
         async function startRecording() {
             try {
                 if (localStream) {
                     localRecorder = new MediaRecorder(localStream, {
-                        mimeType: 'video/webm;codecs=vp8,opus' // Specify codec for better compatibility
+                        mimeType: 'video/webm;codecs=vp8,opus'
                     });
 
                     localRecorder.ondataavailable = (event) => {
@@ -448,8 +448,6 @@
                             localChunks.push(event.data);
                         }
                     };
-
-                    // Set a reasonable timeslice for chunks (e.g., 1000ms)
                     localRecorder.start(1000);
                     addLog("Local recording started");
                 }
@@ -472,8 +470,6 @@
                 } else {
                     addLog("Warning: No remote stream available to record");
                 }
-
-                // Enable/disable appropriate buttons
                 document.getElementById('startRecording').disabled = true;
                 document.getElementById('stopRecording').disabled = false;
             } catch (error) {
@@ -488,7 +484,7 @@
                     localRecorder.stop();
                     addLog('Stopped recording local stream');
 
-                    // Wait for the data to be processed
+                    //wait till the data is processed
                     await new Promise(resolve => {
                         localRecorder.onstop = () => {
                             saveRecording(localChunks, 'local');
@@ -501,7 +497,6 @@
                     remoteRecorder.stop();
                     addLog('Stopped recording remote stream');
 
-                    // Wait for the data to be processed
                     await new Promise(resolve => {
                         remoteRecorder.onstop = () => {
                             saveRecording(remoteChunks, 'remote');
@@ -509,12 +504,8 @@
                         };
                     });
                 }
-
-                // Reset recorders
                 localRecorder = null;
                 remoteRecorder = null;
-
-                // Enable/disable appropriate buttons
                 document.getElementById('startRecording').disabled = false;
                 document.getElementById('stopRecording').disabled = true;
             } catch (error) {
@@ -534,7 +525,6 @@
                     type: 'video/webm;codecs=vp8,opus'
                 });
 
-                // Clear the chunks array
                 chunks.length = 0;
 
                 const url = URL.createObjectURL(blob);
@@ -544,8 +534,6 @@
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-
-                // Clean up the URL object
                 URL.revokeObjectURL(url);
 
                 addLog(`Saved ${type} recording`);
@@ -557,8 +545,8 @@
 
         // Update the button states when the call starts/ends
         function updateRecordingButtonStates() {
-            const hasStreams = localStream && document.getElementById('remoteVideo').srcObject;
-            document.getElementById('startRecording').disabled = !hasStreams;
+            const streamAvailable = localStream && document.getElementById('remoteVideo').srcObject;
+            document.getElementById('startRecording').disabled = !streamAvailable;
             document.getElementById('stopRecording').disabled = true;
         }
 
