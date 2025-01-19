@@ -1,15 +1,41 @@
 const WebSocket = require('ws');
 const express = require('express');
 const http = require('http');
+const cors = require('cors');
+const os = require('os'); 
 
 const app = express();
+app.get('/', (req, res) => {
+    res.sendFile(__dirname + '/public/client.html');
+});
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ 
+    server,
+    clientTracking: true
+});
 
+app.use(cors());
 app.use(express.static('public'));
+app.use(cors({
+    origin: '*', // Be more restrictive in production
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type']
+}));
 
 // Store active connections
 const rooms = new Map();
+function getLocalIP() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const interface of interfaces[name]) {
+            // Skip internal (i.e. 127.0.0.1) and non-IPv4 addresses
+            if (interface.family === 'IPv4' && !interface.internal) {
+                return interface.address;
+            }
+        }
+    }
+    return '0.0.0.0'; // Fallback
+}
 
 // Utility function to broadcast room status
 function broadcastRoomStatus(roomId) {
@@ -74,7 +100,9 @@ wss.on('connection', (ws) => {
     });
 });
 
-server.listen(8080, () => {
-    console.log('Server running on port 8080');
-    console.log('WebRTC signaling server is ready');
+const ip = getLocalIP();
+server.listen(8080, '0.0.0.0', () => {
+    console.log(`Server running on http://${ip}:8080`);
+    console.log(`WebSocket server running on ws://${ip}:8080`);
+    console.log('Share this IP address with others to connect');
 });
