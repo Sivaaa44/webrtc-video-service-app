@@ -153,6 +153,8 @@
     <div class="controls">
         <button id="startButton">Start Call</button>
         <button id="hangupButton" disabled>End Call</button>
+        <button id="startRecording" disabled>Start Recording</button>
+        <button id="stopRecording" disabled>Stop Recording</button>
     </div>
 
     <div class="status-log">
@@ -192,11 +194,27 @@
             statusDiv.textContent = message;
         }
 
+        function waitForWebSocketConnection(ws) {
+            return new Promise((resolve, reject) => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    resolve();
+                } else {
+                    ws.addEventListener('open', () => resolve(), { once: true });
+                    ws.addEventListener('error', (err) => reject(err), { once: true });
+                }
+            });
+        }
+
+        // Usage in your start function
         async function start() {
             try {
                 document.getElementById('startButton').disabled = true;
                 updateConnectionStatus('connecting', 'Connecting...');
                 addLog('Requesting camera and microphone access...');
+
+                // Wait for WebSocket to connect
+                await waitForWebSocketConnection(ws);
+                addLog('WebSocket connection established');
 
                 // Get local media
                 localStream = await navigator.mediaDevices.getUserMedia({
@@ -215,6 +233,7 @@
                     room: room
                 }));
                 addLog('Joined room: ' + room);
+
                 // Create and send offer
                 const offer = await peerConnection.createOffer();
                 await peerConnection.setLocalDescription(offer);
@@ -229,7 +248,7 @@
             }
         }
 
-        function createPeerConnection() {
+        async function createPeerConnection() {
             peerConnection = new RTCPeerConnection(config);
             addLog('Created new peer connection');
 
@@ -243,6 +262,7 @@
                 document.getElementById('remoteVideo').srcObject = event.streams[0];
                 addLog('Received remote video stream');
                 updateConnectionStatus('connected', 'Connected');
+                document.getElementById('startRecording').disabled = false
             };
 
             // Handle connection state changes
@@ -336,8 +356,289 @@
             updateConnectionStatus('disconnected', 'Call ended');
         }
 
+
+        // let localChunk = [];
+        // let remoteChunk = [];
+        // let localRecorder, remoteRecorder;
+
+        // const startRecordingButton = document.getElementById('startRecording');
+        // const stopRecordingButton = document.getElementById('stopRecording');
+
+        // async function startRecording() {
+        //     if (localStream) {
+        //         localRecorder = new MediaRecorder(localStream);
+        //         localRecorder.ondataavailable = (event) => {
+        //             if (event.data.size > 0) {
+        //                 localChunk.push(event.data);
+        //             }
+        //         }
+        //         localRecorder.start();
+        //         addLog("local recording has started")
+        //     }
+
+        //     const remoteVideo = document.getElementById('remoteVideo');
+        //     const remoteStream = remoteVideo.srcObject;
+        //     if (remoteStream) {
+        //         remoteRecorder = new MediaRecorder(remoteStream);
+        //         remoteRecorder.ondataavailable = (event) => {
+        //             if (event.data.size > 0) {
+        //                 remoteChunk.push(event.data);
+        //             }
+        //         }
+        //         remoteRecorder.start();
+        //         addLog("remote recording has started");
+        //     }
+
+        //     startRecordingButton.disabled = true;
+        //     stopRecordingButton.disabled = false;
+        // }
+
+        // async function stopRecording() {
+        //     if (localRecorder) {
+        //         localRecorder.stop();
+        //         localRecorder.onstop = saveLocalRecording;
+        //         addLog('Stopped recording local stream');
+        //     }
+
+        //     if (remoteRecorder) {
+        //         remoteRecorder.stop();
+        //         remoteRecorder.onstop = saveRemoteRecording;
+        //         addLog('Stopped recording remote stream');
+        //     }
+
+        //     startRecordingButton.disabled = false;
+        //     stopRecordingButton.disabled = true;
+        // }
+
+        // function saveLocalRecording() {
+        //     const blob = new Blob(localChunks, { type: 'video/webm' });
+        //     localChunks = [];
+        //     const url = URL.createObjectURL(blob);
+        //     const a = document.createElement('a');
+        //     a.href = url;
+        //     a.download = `local-recording-${new Date().toISOString()}.webm`;
+        //     a.click();
+        //     addLog('Saved local recording');
+        // }
+
+        // function saveRemoteRecording() {
+        //     const blob = new Blob(remoteChunks, { type: 'video/webm' });
+        //     remoteChunks = [];
+        //     const url = URL.createObjectURL(blob);
+        //     const a = document.createElement('a');
+        //     a.href = url;
+        //     a.download = `remote-recording-${new Date().toISOString()}.webm`;
+        //     a.click();
+        //     addLog('Saved remote recording');
+        // }
+
+        let localChunks = [];
+        let remoteChunks = [];
+        let localRecorder, remoteRecorder;
+        let combinedRecorder;
+        let combinedCanvas, combinedContext;
+        let audioContext, audioDestination;
+
+        function setupCombinedCanvas() {
+            combinedCanvas = document.createElement('canvas');
+            combinedCanvas.width = 1280;  // 640 * 2
+            combinedCanvas.height = 480;
+            combinedContext = combinedCanvas.getContext('2d');
+        }
+
+        async function setupAudioMixer() {
+            audioContext = new AudioContext();
+            audioDestination = audioContext.createMediaStreamDestination();
+        }
+
+        async function startRecording() {
+            try {
+                setupCombinedCanvas();
+                await setupAudioMixer();
+
+                if (localStream) {
+                    // Add local audio to the mixer
+                    const localAudioTrack = localStream.getAudioTracks()[0];
+                    if (localAudioTrack) {
+                        const localAudioSource = audioContext.createMediaStreamSource(new MediaStream([localAudioTrack]));
+                        localAudioSource.connect(audioDestination);
+                    }
+
+                    localRecorder = new MediaRecorder(localStream, {
+                        mimeType: 'video/webm;codecs=vp8,opus'
+                    });
+
+                    localRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            localChunks.push(event.data);
+                        }
+                    };
+
+                    localRecorder.start(1000);
+                    addLog("Local recording started");
+                }
+
+                const remoteVideo = document.getElementById('remoteVideo');
+                const remoteStream = remoteVideo.srcObject;
+                if (remoteStream) {
+                    // Add remote audio to the mixer
+                    const remoteAudioTrack = remoteStream.getAudioTracks()[0];
+                    if (remoteAudioTrack) {
+                        const remoteAudioSource = audioContext.createMediaStreamSource(new MediaStream([remoteAudioTrack]));
+                        remoteAudioSource.connect(audioDestination);
+                    }
+
+                    remoteRecorder = new MediaRecorder(remoteStream, {
+                        mimeType: 'video/webm;codecs=vp8,opus'
+                    });
+
+                    remoteRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            remoteChunks.push(event.data);
+                        }
+                    };
+
+                    remoteRecorder.start(1000);
+                    addLog("Remote recording started");
+                } else {
+                    addLog("Warning: No remote stream available to record");
+                }
+
+                // Create a combined stream with both video and audio
+                const combinedVideoStream = combinedCanvas.captureStream(30); // 30 FPS
+                const combinedTracks = [
+                    ...combinedVideoStream.getVideoTracks(),
+                    ...audioDestination.stream.getAudioTracks()
+                ];  
+                const combinedStream = new MediaStream(combinedTracks);
+
+                combinedRecorder = new MediaRecorder(combinedStream, {
+                    mimeType: 'video/webm;codecs=vp8,opus'
+                });
+
+                const combinedChunks = [];
+                combinedRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        combinedChunks.push(event.data);
+                    }
+                };
+
+                // Start the frame composition loop
+                requestAnimationFrame(drawCombinedFrame);
+                combinedRecorder.start(1000);
+
+                document.getElementById('startRecording').disabled = true;
+                document.getElementById('stopRecording').disabled = false;
+
+                // Save the combined recording when stopped
+                combinedRecorder.onstop = () => {
+                    saveCombinedRecording(combinedChunks);
+                };
+
+            } catch (error) {
+                addLog(`Recording failed to start: ${error.message}`);
+                console.error('Recording error:', error);
+            }
+        }
+
+        function drawCombinedFrame() {
+            if (combinedRecorder && combinedRecorder.state === 'recording') {
+                // Clear the canvas
+                combinedContext.fillStyle = '#000';
+                combinedContext.fillRect(0, 0, combinedCanvas.width, combinedCanvas.height);
+
+                // Draw local video on the left side
+                const localVideo = document.getElementById('localVideo');
+                combinedContext.drawImage(localVideo, 0, 0, combinedCanvas.width / 2, combinedCanvas.height);
+
+                // Draw remote video on the right side
+                const remoteVideo = document.getElementById('remoteVideo');
+                combinedContext.drawImage(remoteVideo, combinedCanvas.width / 2, 0, combinedCanvas.width / 2, combinedCanvas.height);
+
+                // Continue the frame composition loop
+                requestAnimationFrame(drawCombinedFrame);
+            }
+        }
+
+        async function stopRecording() {
+            try {
+                if (localRecorder && localRecorder.state === 'recording') {
+                    localRecorder.stop();
+                    addLog('Stopped recording local stream');
+                }
+
+                if (remoteRecorder && remoteRecorder.state === 'recording') {
+                    remoteRecorder.stop();
+                    addLog('Stopped recording remote stream');
+                }
+
+                if (combinedRecorder && combinedRecorder.state === 'recording') {
+                    combinedRecorder.stop();
+                    addLog('Stopped recording combined stream');
+                }
+
+                // Close audio context
+                if (audioContext) {
+                    await audioContext.close();
+                }
+
+                // Reset recorders and audio context
+                localRecorder = null;
+                remoteRecorder = null;
+                combinedRecorder = null;
+                audioContext = null;
+                audioDestination = null;
+
+                // Enable/disable appropriate buttons
+                document.getElementById('startRecording').disabled = false;
+                document.getElementById('stopRecording').disabled = true;
+
+            } catch (error) {
+                addLog(`Error stopping recording: ${error.message}`);
+                console.error('Stop recording error:', error);
+            }
+        }
+
+        function saveCombinedRecording(chunks) {
+            try {
+                if (chunks.length === 0) {
+                    addLog('No combined recording data available');
+                    return;
+                }
+
+                const blob = new Blob(chunks, {
+                    type: 'video/webm;codecs=vp8,opus'
+                });
+
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `combined-recording-${new Date().toISOString()}.webm`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+
+                // Clean up the URL object
+                URL.revokeObjectURL(url);
+
+                addLog('Saved combined recording with audio');
+            } catch (error) {
+                addLog(`Error saving combined recording: ${error.message}`);
+                console.error('Save recording error:', error);
+            }
+        }
+
+        // Update the button states when the call starts/ends
+        function updateRecordingButtonStates() {
+            const hasStreams = localStream && document.getElementById('remoteVideo').srcObject;
+            document.getElementById('startRecording').disabled = !hasStreams;
+            document.getElementById('stopRecording').disabled = true;
+        }
+
         document.getElementById('startButton').onclick = start;
         document.getElementById('hangupButton').onclick = hangup;
+        document.getElementById('startRecording').onclick = startRecording;
+        document.getElementById('stopRecording').onclick = stopRecording;
     </script>
 </body>
 
