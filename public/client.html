@@ -163,273 +163,381 @@
     </div>
 
     <script>
-        const generateRoomId = () => Math.random().toString(36).substring(7);
-        const room = new URLSearchParams(window.location.search).get('room') || generateRoomId();
-
-        document.getElementById('roomDisplay').textContent = room;
-        const shareUrl = `${window.location.origin}${window.location.pathname}?room=${room}`;
-        document.getElementById('shareUrl').textContent = shareUrl;
-
-        let peerConnection;
-        let localStream;
-        const ws = new WebSocket('ws://localhost:8080');
-
+        // Constants and Configuration
         const config = {
             iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' }
-            ]
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ],
+            iceCandidatePoolSize: 10
         };
 
-        function addLog(message) {
-            const logContainer = document.getElementById('logContainer');
-            const logEntry = document.createElement('div');
-            logEntry.className = 'log-entry';
-            logEntry.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
-            logContainer.insertBefore(logEntry, logContainer.firstChild);
-        }
+        class WebRTCClient {
+            constructor() {
+                this.room = new URLSearchParams(window.location.search).get('room') || this.generateRoomId();
+                this.userId = Math.random().toString(36).substring(7);
+                this.peers = new Map();
+                this.localStream = null;
+                this.ws = null;
+                this.reconnectAttempts = 0;
+                this.maxReconnectAttempts = 5;
+                this.reconnectInterval = 2000;
 
-        function updateConnectionStatus(status, message) {
-            const statusDiv = document.getElementById('connectionStatus');
-            statusDiv.className = `connection-status status-${status}`;
-            statusDiv.textContent = message;
-        }
+                // Initialize WebSocket connection with reconnection logic
+                this.initializeWebSocket();
 
-        function waitForWebSocketConnection(ws) {
-            return new Promise((resolve, reject) => {
-                if (ws.readyState === WebSocket.OPEN) {
-                    resolve();
-                } else {
-                    ws.addEventListener('open', () => resolve(), { once: true });
-                    ws.addEventListener('error', (err) => reject(err), { once: true });
-                }
-            });
-        }
+                // Bind UI elements
+                this.bindUIElements();
 
-        // Usage in your start function
-        async function start() {
-            try {
-                document.getElementById('startButton').disabled = true;
-                updateConnectionStatus('connecting', 'Connecting...');
-                addLog('Requesting camera and microphone access...');
-
-                // Wait for WebSocket to connect
-                await waitForWebSocketConnection(ws);
-                addLog('WebSocket connection established');
-
-                // Get local media
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: true,
-                    audio: true
-                });
-                document.getElementById('localVideo').srcObject = localStream;
-                addLog('Camera and microphone access granted');
-
-                // Create peer connection
-                createPeerConnection();
-
-                // Join room
-                ws.send(JSON.stringify({
-                    type: 'join',
-                    room: room
-                }));
-                addLog('Joined room: ' + room);
-
-                // Create and send offer
-                const offer = await peerConnection.createOffer();
-                await peerConnection.setLocalDescription(offer);
-                sendSignal(offer);
-                addLog('Created and sent connection offer');
-                document.getElementById('hangupButton').disabled = false;
-            } catch (err) {
-                addLog('Error: ' + err.message);
-                updateConnectionStatus('disconnected', 'Connection failed');
-                document.getElementById('startButton').disabled = false;
-                console.error(err);
-            }
-        }
-
-        async function createPeerConnection() {
-            peerConnection = new RTCPeerConnection(config);
-            addLog('Created new peer connection');
-
-            // Add local tracks to peer connection
-            localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
-            });
-
-            // Handle incoming tracks
-            peerConnection.ontrack = event => {
-                document.getElementById('remoteVideo').srcObject = event.streams[0];
-                addLog('Received remote video stream');
-                updateConnectionStatus('connected', 'Connected');
-                document.getElementById('startRecording').disabled = false
-            };
-
-            // Handle connection state changes
-            peerConnection.oniceconnectionstatechange = () => {
-                addLog('ICE connection state: ' + peerConnection.iceConnectionState);
-                if (peerConnection.iceConnectionState === 'disconnected') {
-                    updateConnectionStatus('disconnected', 'Disconnected');
-                }
-            };
-
-            // Handle and send ICE candidates
-            peerConnection.onicecandidate = event => {
-                if (event.candidate) {
-                    sendSignal({
-                        type: 'candidate',
-                        candidate: event.candidate
-                    });
-                    addLog('Sent ICE candidate');
-                }
-            };
-        }
-
-        function sendSignal(signal) {
-            ws.send(JSON.stringify({
-                type: 'signal',
-                room: room,
-                signal: signal
-            }));
-        }
-
-        // Handle incoming signals
-        ws.onmessage = async (event) => {
-            const data = JSON.parse(event.data);
-
-            if (data.type === 'roomStatus') {
-                document.getElementById('participantCount').textContent =
-                    `Participants: ${data.participants}`;
-                return;
+                // Display room information
+                document.getElementById('roomDisplay').textContent = this.room;
+                const shareUrl = `${window.location.origin}${window.location.pathname}?room=${this.room}`;
+                document.getElementById('shareUrl').textContent = shareUrl;
             }
 
-            try {
-                if (data.type === 'offer') {
-                    addLog('Received connection offer');
-                    if (!peerConnection) {
-                        await start();
+            generateRoomId() {
+                return Math.random().toString(36).substring(7);
+            }
+
+            initializeWebSocket() {
+                this.ws = new WebSocket('ws://localhost:8080');
+
+                this.ws.onopen = () => {
+                    this.reconnectAttempts = 0;
+                    this.addLog('Connected to signaling server');
+                    this.updateConnectionStatus('ready', 'Ready to connect');
+                    document.getElementById('startButton').disabled = false;
+                };
+
+                this.ws.onclose = () => {
+                    this.addLog('Disconnected from signaling server');
+                    this.updateConnectionStatus('disconnected', 'Signaling server disconnected');
+                    this.handleWebSocketReconnection();
+                };
+
+                this.ws.onerror = (error) => {
+                    this.addLog(`WebSocket error: ${error.message}`);
+                    this.updateConnectionStatus('error', 'Connection error');
+                };
+
+                this.ws.onmessage = async (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        await this.handleSignalingMessage(data);
+                    } catch (err) {
+                        this.addLog(`Error handling message: ${err.message}`);
                     }
-                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
-                    const answer = await peerConnection.createAnswer();
-                    await peerConnection.setLocalDescription(answer);
-                    sendSignal(answer);
-                    addLog('Sent connection answer');
-                }
-                else if (data.type === 'answer') {
-                    addLog('Received connection answer');
-                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
-                }
-                else if (data.type === 'candidate') {
-                    addLog('Received ICE candidate');
-                    await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-                }
-            } catch (err) {
-                addLog('Error: ' + err.message);
-                console.error(err);
+                };
             }
-        };
 
-        ws.onopen = () => {
-            addLog('Connected to signaling server');
-            document.getElementById('startButton').disabled = false;
-            updateConnectionStatus('ready', 'Ready to connect');
-        };
+            async handleSignalingMessage(data) {
+                switch (data.type) {
+                    case 'sessionInfo':
+                        this.currentSessionId = data.sessionId;
+                        this.addLog(`Joined session: ${this.currentSessionId}`);
+                        this.updateConnectionStatus('connecting', 'Waiting for peers...');
 
-        ws.onclose = () => {
-            addLog('Disconnected from signaling server');
-            updateConnectionStatus('disconnected', 'Signaling server disconnected');
+                        // Create peer connections for existing participants
+                        for (const peerId of data.peers) {
+                            await this.createPeerConnection(peerId, true);
+                        }
+                        break;
+
+                    case 'newPeer':
+                        this.addLog(`New peer joined: ${data.userId}`);
+                        await this.createPeerConnection(data.userId, false);
+                        break;
+
+                    case 'offer':
+                        await this.handleOffer(data.from, data.data);
+                        break;
+
+                    case 'answer':
+                        await this.handleAnswer(data.from, data.data);
+                        break;
+
+                    case 'candidate':
+                        await this.handleCandidate(data.from, data.data);
+                        break;
+
+                    case 'peerLeft':
+                        this.handlePeerDisconnection(data.userId);
+                        break;
+                }
+            }
+
+            async createPeerConnection(peerId, isInitiator) {
+                try {
+                    const pc = new RTCPeerConnection(config);
+                    this.peers.set(peerId, pc);
+
+                    // Handle ICE candidates
+                    pc.onicecandidate = ({ candidate }) => {
+                        if (candidate) {
+                            this.sendSignalingMessage('candidate', peerId, candidate);
+                        }
+                    };
+
+                    // Monitor ICE connection state
+                    pc.oniceconnectionstatechange = () => {
+                        this.handleICEConnectionStateChange(pc, peerId);
+                    };
+
+                    // Handle negotiation needed
+                    pc.onnegotiationneeded = async () => {
+                        try {
+                            if (isInitiator) {
+                                await this.createAndSendOffer(pc, peerId);
+                            }
+                        } catch (err) {
+                            this.addLog(`Negotiation failed: ${err.message}`);
+                        }
+                    };
+
+                    // Handle remote tracks
+                    pc.ontrack = (event) => {
+                        this.handleRemoteTrack(event, peerId);
+                    };
+
+                    // Add local tracks
+                    if (this.localStream) {
+                        this.localStream.getTracks().forEach(track => {
+                            pc.addTrack(track, this.localStream);
+                        });
+                    }
+
+                    if (isInitiator) {
+                        await this.createAndSendOffer(pc, peerId);
+                    }
+
+                    return pc;
+                } catch (err) {
+                    this.addLog(`Failed to create peer connection: ${err.message}`);
+                    throw err;
+                }
+            }
+
+            async createAndSendOffer(pc, peerId) {
+                try {
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    this.sendSignalingMessage('offer', peerId, offer);
+                } catch (err) {
+                    this.addLog(`Failed to create offer: ${err.message}`);
+                    throw err;
+                }
+            }
+
+            async handleOffer(peerId, offer) {
+                try {
+                    let pc = this.peers.get(peerId);
+                    if (!pc) {
+                        pc = await this.createPeerConnection(peerId, false);
+                    }
+
+                    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    this.sendSignalingMessage('answer', peerId, answer);
+                } catch (err) {
+                    this.addLog(`Failed to handle offer: ${err.message}`);
+                }
+            }
+
+            async handleAnswer(peerId, answer) {
+                try {
+                    const pc = this.peers.get(peerId);
+                    if (pc) {
+                        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+                    }
+                } catch (err) {
+                    this.addLog(`Failed to handle answer: ${err.message}`);
+                }
+            }
+
+            async handleCandidate(peerId, candidate) {
+                try {
+                    const pc = this.peers.get(peerId);
+                    if (pc) {
+                        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                    }
+                } catch (err) {
+                    this.addLog(`Failed to handle ICE candidate: ${err.message}`);
+                }
+            }
+
+            handleICEConnectionStateChange(pc, peerId) {
+                this.addLog(`ICE connection state with peer ${peerId}: ${pc.iceConnectionState}`);
+
+                switch (pc.iceConnectionState) {
+                    case 'failed':
+                        // Attempt ICE restart
+                        this.restartICE(pc, peerId);
+                        break;
+                    case 'disconnected':
+                        // Wait briefly for potential recovery
+                        setTimeout(() => {
+                            if (pc.iceConnectionState === 'disconnected') {
+                                this.restartICE(pc, peerId);
+                            }
+                        }, 3000);
+                        break;
+                    case 'connected':
+                        this.updateConnectionStatus('connected', 'Connected');
+                        break;
+                }
+            }
+
+            async restartICE(pc, peerId) {
+                try {
+                    const offer = await pc.createOffer({ iceRestart: true });
+                    await pc.setLocalDescription(offer);
+                    this.sendSignalingMessage('offer', peerId, offer);
+                } catch (err) {
+                    this.addLog(`ICE restart failed: ${err.message}`);
+                    this.handlePeerDisconnection(peerId);
+                }
+            }
+
+            handleRemoteTrack(event, peerId) {
+                const remoteVideo = document.getElementById('remoteVideo');
+                if (remoteVideo.srcObject !== event.streams[0]) {
+                    remoteVideo.srcObject = event.streams[0];
+                    this.addLog(`Receiving media from peer: ${peerId}`);
+                    this.updateConnectionStatus('connected', 'Connected');
+                    document.getElementById('startRecording').disabled = false;
+                }
+            }
+
+            handlePeerDisconnection(peerId) {
+                const pc = this.peers.get(peerId);
+                if (pc) {
+                    pc.close();
+                    this.peers.delete(peerId);
+                }
+
+                if (this.peers.size === 0) {
+                    const remoteVideo = document.getElementById('remoteVideo');
+                    remoteVideo.srcObject = null;
+                    this.updateConnectionStatus('disconnected', 'No peers connected');
+                    document.getElementById('startRecording').disabled = true;
+                }
+            }
+
+            async start() {
+                try {
+                    document.getElementById('startButton').disabled = true;
+                    this.updateConnectionStatus('connecting', 'Getting media access...');
+
+                    // Get local media with fallback
+                    try {
+                        this.localStream = await navigator.mediaDevices.getUserMedia({
+                            video: true,
+                            audio: true
+                        });
+                    } catch (err) {
+                        // Fallback to audio only if video fails
+                        if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                            this.localStream = await navigator.mediaDevices.getUserMedia({
+                                audio: true
+                            });
+                            this.addLog('No camera detected, audio only mode');
+                        } else {
+                            throw err;
+                        }
+                    }
+
+                    document.getElementById('localVideo').srcObject = this.localStream;
+                    this.addLog('Media access granted');
+
+                    // Join session with room ID
+                    this.sendSignalingMessage('join', null, null);
+                    document.getElementById('hangupButton').disabled = false;
+
+                } catch (err) {
+                    this.addLog(`Start failed: ${err.message}`);
+                    this.updateConnectionStatus('error', 'Failed to start');
+                    document.getElementById('startButton').disabled = false;
+                }
+            }
+
+            hangup() {
+                this.addLog('Ending call');
+
+                // Close all peer connections
+                this.peers.forEach((pc, peerId) => {
+                    this.handlePeerDisconnection(peerId);
+                });
+
+                // Stop local media
+                if (this.localStream) {
+                    this.localStream.getTracks().forEach(track => track.stop());
+                    this.localStream = null;
+                }
+
+                // Reset UI
+                document.getElementById('localVideo').srcObject = null;
+                document.getElementById('remoteVideo').srcObject = null;
+                document.getElementById('startButton').disabled = false;
+                document.getElementById('hangupButton').disabled = true;
+                document.getElementById('startRecording').disabled = true;
+
+                // Notify server
+                this.sendSignalingMessage('leave', null, null);
+                this.updateConnectionStatus('disconnected', 'Call ended');
+            }
+
+            // Helper methods
+            addLog(message) {
+                const logContainer = document.getElementById('logContainer');
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+                logEntry.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
+                logContainer.insertBefore(logEntry, logContainer.firstChild);
+            }
+
+            updateConnectionStatus(status, message) {
+                const statusDiv = document.getElementById('connectionStatus');
+                statusDiv.className = `connection-status status-${status}`;
+                statusDiv.textContent = message;
+            }
+
+            sendSignalingMessage(type, targetUserId, data) {
+                if (this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type,
+                        userId: this.userId,
+                        targetUserId,
+                        data,
+                        room: this.room
+                    }));
+                } else {
+                    this.addLog('Cannot send message - no connection to server');
+                }
+            }
+
+            handleWebSocketReconnection() {
+                if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                    this.reconnectAttempts++;
+                    this.addLog(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+                    setTimeout(() => this.initializeWebSocket(), this.reconnectInterval);
+                } else {
+                    this.addLog('Failed to reconnect to server');
+                    this.updateConnectionStatus('error', 'Connection failed');
+                }
+            }
+
+            bindUIElements() {
+                document.getElementById('startButton').onclick = () => this.start();
+                document.getElementById('hangupButton').onclick = () => this.hangup();
+            }
         }
 
-        function hangup() {
-            addLog('Ending call');
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
-            }
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-            }
-            document.getElementById('localVideo').srcObject = null;
-            document.getElementById('remoteVideo').srcObject = null;
-            document.getElementById('startButton').disabled = false;
-            document.getElementById('hangupButton').disabled = true;
-            updateConnectionStatus('disconnected', 'Call ended');
-        }
+        // Initialize the client
+        const webRTCClient = new WebRTCClient();
 
-        // let localChunk = [];
-        // let remoteChunk = [];
-        // let localRecorder, remoteRecorder;
 
-        // const startRecordingButton = document.getElementById('startRecording');
-        // const stopRecordingButton = document.getElementById('stopRecording');
 
-        // async function startRecording() {
-        //     if (localStream) {
-        //         localRecorder = new MediaRecorder(localStream);
-        //         localRecorder.ondataavailable = (event) => {
-        //             if (event.data.size > 0) {
-        //                 localChunk.push(event.data);
-        //             }
-        //         }
-        //         localRecorder.start();
-        //         addLog("local recording has started")
-        //     }
-
-        //     const remoteVideo = document.getElementById('remoteVideo');
-        //     const remoteStream = remoteVideo.srcObject;
-        //     if (remoteStream) {
-        //         remoteRecorder = new MediaRecorder(remoteStream);
-        //         remoteRecorder.ondataavailable = (event) => {
-        //             if (event.data.size > 0) {
-        //                 remoteChunk.push(event.data);
-        //             }
-        //         }
-        //         remoteRecorder.start();
-        //         addLog("remote recording has started");
-        //     }
-
-        //     startRecordingButton.disabled = true;
-        //     stopRecordingButton.disabled = false;
-        // }
-
-        // async function stopRecording() {
-        //     if (localRecorder) {
-        //         localRecorder.stop();
-        //         localRecorder.onstop = saveLocalRecording;
-        //         addLog('Stopped recording local stream');
-        //     }
-
-        //     if (remoteRecorder) {
-        //         remoteRecorder.stop();
-        //         remoteRecorder.onstop = saveRemoteRecording;
-        //         addLog('Stopped recording remote stream');
-        //     }
-
-        //     startRecordingButton.disabled = false;
-        //     stopRecordingButton.disabled = true;
-        // }
-
-        // function saveLocalRecording() {
-        //     const blob = new Blob(localChunks, { type: 'video/webm' });
-        //     localChunks = [];
-        //     const url = URL.createObjectURL(blob);
-        //     const a = document.createElement('a');
-        //     a.href = url;
-        //     a.download = `local-recording-${new Date().toISOString()}.webm`;
-        //     a.click();
-        //     addLog('Saved local recording');
-        // }
-
-        // function saveRemoteRecording() {
-        //     const blob = new Blob(remoteChunks, { type: 'video/webm' });
-        //     remoteChunks = [];
-        //     const url = URL.createObjectURL(blob);
-        //     const a = document.createElement('a');
-        //     a.href = url;
-        //     a.download = `remote-recording-${new Date().toISOString()}.webm`;
-        //     a.click();
-        //     addLog('Saved remote recording');
-        // }
 
         let localChunks = [];
         let remoteChunks = [];
