@@ -224,6 +224,34 @@ wss.on('connection', (ws) => {
                     }
                     break;
                 }
+
+                case 'recordingRequest':
+                case 'recordingResponse': {
+                    const session = sessions.get(ws.sessionId);
+                    if (!session) {
+                        throw new Error('No active session found');
+                    }
+
+                    if (data.type === 'recordingRequest') {
+                        // Broadcast recording request to all peers except sender
+                        session.broadcast({
+                            type: 'recordingRequest',
+                            data: data.data,
+                            from: userId
+                        }, userId);
+                    } else {
+                        // Send recording response only to the initiator
+                        const targetPeer = session.participants.get(data.targetUserId);
+                        if (targetPeer && targetPeer.readyState === WebSocket.OPEN) {
+                            targetPeer.send(JSON.stringify({
+                                type: 'recordingResponse',
+                                data: data.data,
+                                from: userId
+                            }));
+                        }
+                    }
+                    break;
+                }
             }
         } catch (error) {
             console.error('Error handling message:', error);
