@@ -203,7 +203,7 @@
 
         class WebRTCClient {
             constructor() {
-                this.room = new (window.location.search).getURLSearchParams('room') || this.generateRoomId();
+                this.room = new URLSearchParams(window.location.search).get('room') || this.generateRoomId();
                 this.userId = Math.random().toString(36).substring(7);
                 this.peers = new Map();
                 this.localStream = null;
@@ -280,6 +280,269 @@
                 document.getElementById('participantCount').textContent = `Participants: ${count}`;
             }
 
+            setupCombinedCanvas() {
+                this.combinedCanvas = document.createElement('canvas');
+                this.combinedCanvas.width = 1280;  // 640 * 2
+                this.combinedCanvas.height = 480;
+                this.combinedContext = this.combinedCanvas.getContext('2d');
+            }
+
+            async setupAudioMixer() {
+                this.audioContext = new AudioContext();
+                this.audioDestination = this.audioContext.createMediaStreamDestination();
+            }
+            
+            async requestRecording() {
+                if (this.isRecording) {
+                    this.addLog('Recording already in progress');
+                    return;
+                }
+
+                try {
+                    // Reset permissions tracking
+                    this.recordingPermissions.clear();
+                    this.requiredPermissions.clear();
+
+                    // If no peers, start recording directly
+                    if (this.peers.size === 0) {
+                        this.addLog('No peers connected - starting solo recording');
+                        await this.startRecording();
+                        return;
+                    }
+
+                    // Track required permissions
+                    this.peers.forEach((_, peerId) => {
+                        this.requiredPermissions.add(peerId);
+                    });
+
+                    // Send recording request to all peers
+                    this.sendSignalingMessage('recordingRequest', null, {
+                        fromUser: this.userId,
+                        room: this.room,
+                        timestamp: Date.now()
+                    });
+
+                    // Update UI
+                    document.getElementById('startRecording').disabled = true;
+                    this.recordingInitiator = this.userId;
+                    this.addLog('Recording permission requested from peers');
+
+                } catch (error) {
+                    this.addLog(`Error requesting recording permission: ${error.message}`);
+                    this.resetRecordingState();
+                }
+            }
+
+            async startRecording() {
+                try {
+                    // Verify streams exist
+                    if (!this.localStream) {
+                        throw new Error('Local stream not available');
+                    }
+
+                    // Get remote stream from the first peer connection
+                    const firstPeer = this.peers.values().next().value;
+                    if (!firstPeer || !firstPeer.getReceivers()[0].track) {
+                        throw new Error('Remote stream not available');
+                    }
+
+                    // Create MediaStream for remote tracks
+                    const remoteStream = new MediaStream();
+                    firstPeer.getReceivers().forEach(receiver => {
+                        remoteStream.addTrack(receiver.track);
+                    });
+
+                    // Initialize recording chunks
+                    this.localChunks = [];
+                    this.remoteChunks = [];
+
+                    // Set up canvas for combined video
+                    this.setupCombinedCanvas();
+                    await this.setupAudioMixer();
+
+                    // Mix audio streams
+                    const localAudioSource = this.audioContext.createMediaStreamSource(this.localStream);
+                    const remoteAudioSource = this.audioContext.createMediaStreamSource(remoteStream);
+                    localAudioSource.connect(this.audioDestination);
+                    remoteAudioSource.connect(this.audioDestination);
+
+                    // Create combined video stream
+                    const combinedStream = this.combinedCanvas.captureStream();
+                    // Add audio to combined stream
+                    this.audioDestination.stream.getAudioTracks().forEach(track => {
+                        combinedStream.addTrack(track);
+                    });
+
+                    // Initialize combined recorder
+                    this.combinedRecorder = new MediaRecorder(combinedStream);
+                    const combinedChunks = [];
+
+                    this.combinedRecorder.ondataavailable = e => combinedChunks.push(e.data);
+                    this.combinedRecorder.onstop = () => {
+                        this.saveCombinedRecording(combinedChunks);
+                    };
+
+                    // Start recording and frame composition
+                    this.combinedRecorder.start();
+                    this.drawCombinedFrame();
+                    this.isRecording = true;
+
+                    // Update UI
+                    this.showRecordingIndicators();
+                    document.getElementById('startRecording').disabled = true;
+                    document.getElementById('stopRecording').disabled = false;
+
+                    // Notify all peers that recording has started
+                    this.sendSignalingMessage('recordingStarted', null, {
+                        fromUser: this.userId
+                    });
+
+                    this.addLog('Recording started successfully');
+                } catch (error) {
+                    this.addLog(`Error starting recording: ${error.message}`);
+                    this.isRecording = false;
+                    document.getElementById('startRecording').disabled = false;
+
+                    // Clean up resources if initialization failed
+                    if (this.audioContext) {
+                        await this.audioContext.close();
+                        this.audioContext = null;
+                    }
+                    this.combinedRecorder = null;
+                }
+            }
+
+            showRecordingIndicators() {
+                document.getElementById('localRecordingIndicator').style.display = 'block';
+                document.getElementById('localRecordingBadge').style.display = 'block';
+                document.getElementById('remoteRecordingIndicator').style.display = 'block';
+                document.getElementById('remoteRecordingBadge').style.display = 'block';
+            }
+
+            hideRecordingIndicators() {
+                document.getElementById('localRecordingIndicator').style.display = 'none';
+                document.getElementById('localRecordingBadge').style.display = 'none';
+                document.getElementById('remoteRecordingIndicator').style.display = 'none';
+                document.getElementById('remoteRecordingBadge').style.display = 'none';
+            }
+
+            drawCombinedFrame() {
+                if (this.combinedRecorder && this.combinedRecorder.state === 'recording') {
+                    // Clear the canvas
+                    this.combinedContext.fillStyle = '#000';
+                    this.combinedContext.fillRect(0, 0, this.combinedCanvas.width, this.combinedCanvas.height);
+
+                    // Draw local video on the left side
+                    const localVideo = document.getElementById('localVideo');
+                    this.combinedContext.drawImage(localVideo, 0, 0, this.combinedCanvas.width / 2, this.combinedCanvas.height);
+
+                    // Draw remote video on the right side
+                    const remoteVideo = document.getElementById('remoteVideo');
+                    this.combinedContext.drawImage(remoteVideo, this.combinedCanvas.width / 2, 0, this.combinedCanvas.width / 2, this.combinedCanvas.height);
+
+                    // Continue the frame composition loop
+                    requestAnimationFrame(() => this.drawCombinedFrame());
+                }
+            }
+
+            async stopRecording() {
+                try {
+                    if (this.localRecorder && this.localRecorder.state === 'recording') {
+                        this.localRecorder.stop();
+                        this.addLog('Stopped recording local stream');
+                    }
+
+                    if (this.remoteRecorder && this.remoteRecorder.state === 'recording') {
+                        this.remoteRecorder.stop();
+                        this.addLog('Stopped recording remote stream');
+                    }
+
+                    if (this.combinedRecorder && this.combinedRecorder.state === 'recording') {
+                        this.combinedRecorder.stop();
+                        this.addLog('Stopped recording combined stream');
+                    }
+
+                    // Close audio context
+                    if (this.audioContext) {
+                        await this.audioContext.close();
+                    }
+
+                    // Reset recorders and audio context
+                    this.localRecorder = null;
+                    this.remoteRecorder = null;
+                    this.combinedRecorder = null;
+                    this.audioContext = null;
+                    this.audioDestination = null;
+                    this.isRecording = false;
+
+                    // Reset UI
+                    document.getElementById('startRecording').disabled = false;
+                    document.getElementById('stopRecording').disabled = true;
+
+                } catch (error) {
+                    this.addLog(`Error stopping recording: ${error.message}`);
+                    console.error('Stop recording error:', error);
+                }
+            }
+
+            saveCombinedRecording(chunks) {
+                try {
+                    if (chunks.length === 0) {
+                        this.addLog('No combined recording data available');
+                        return;
+                    }
+
+                    const blob = new Blob(chunks, {
+                        type: 'video/webm;codecs=vp8,opus'
+                    });
+
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `recording-session-${this.currentSessionId}-${new Date().toISOString()}.webm`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+
+                    this.addLog('Saved combined recording with audio');
+                } catch (error) {
+                    this.addLog(`Error saving combined recording: ${error.message}`);
+                    console.error('Save recording error:', error);
+                }
+            }
+
+            updateRecordingUI(isRecording) {
+                const localIndicator = document.getElementById('localRecordingIndicator');
+                const remoteIndicator = document.getElementById('remoteRecordingIndicator');
+                const localBadge = document.getElementById('localRecordingBadge');
+                const remoteBadge = document.getElementById('remoteRecordingBadge');
+
+                if (isRecording) {
+                    localIndicator.style.display = 'block';
+                    remoteIndicator.style.display = 'block';
+                    localBadge.style.display = 'block';
+                    remoteBadge.style.display = 'block';
+                } else {
+                    localIndicator.style.display = 'none';
+                    remoteIndicator.style.display = 'none';
+                    localBadge.style.display = 'none';
+                    remoteBadge.style.display = 'none';
+                }
+            }
+
+            bindUIElements() {
+                document.getElementById('startButton').onclick = () => this.start();
+                document.getElementById('hangupButton').onclick = () => this.hangup();
+                document.getElementById('startRecording').onclick = () => this.requestRecording();
+                document.getElementById('stopRecording').onclick = () => this.stopRecording();
+            }
+
+            updateRecordingButtonStates() {
+                const hasStreams = localStream && document.getElementById('remoteVideo').srcObject;
+                document.getElementById('startRecording').disabled = !hasStreams;
+                document.getElementById('stopRecording').disabled = true;
+            }
 
             async handleSignalingMessage(data) {
                 console.log('Received signal:', data.type, data);
@@ -342,6 +605,144 @@
                         this.addLog('Recording stopped');
                         break;
                 }
+            }
+            
+            async handleRecordingRequest(data) {
+                const { fromUser } = data.data;
+                console.log('Received recording request from:', fromUser);
+
+                // Create and show the permission dialog
+                const permissionDialog = document.createElement('div');
+                permissionDialog.className = 'permission-dialog';
+                permissionDialog.innerHTML = `
+        <div class="dialog-content">
+            <h3>Recording Permission</h3>
+            <p>User ${fromUser} wants to record this call</p>
+            <div class="dialog-buttons">
+                <button id="allowRecording" class="allow-btn">Allow</button>
+                <button id="denyRecording" class="deny-btn">Deny</button>
+            </div>
+        </div>
+    `;
+
+                // Add styles if not already added
+                if (!document.getElementById('permission-dialog-styles')) {
+                    const style = document.createElement('style');
+                    style.id = 'permission-dialog-styles';
+                    style.textContent = `
+            .permission-dialog {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;
+            }
+            .dialog-content {
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+            .dialog-buttons {
+                margin-top: 15px;
+                text-align: center;
+            }
+            .allow-btn {
+                background: #4CAF50;
+                color: white;
+                margin-right: 10px;
+            }
+            .deny-btn {
+                background: #f44336;
+                color: white;
+            }
+            .dialog-buttons button {
+                padding: 8px 16px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+        `;
+                    document.head.appendChild(style);
+                }
+                document.body.appendChild(permissionDialog);
+
+                try {
+                    const allowed = await new Promise((resolve) => {
+                        document.getElementById('allowRecording').onclick = () => {
+                            permissionDialog.remove();
+                            resolve(true);
+                        };
+                        document.getElementById('denyRecording').onclick = () => {
+                            permissionDialog.remove();
+                            resolve(false);
+                        };
+                    });
+
+                    // Send response back to initiator
+                    this.sendSignalingMessage('recordingResponse', fromUser, {
+                        allowed: allowed,
+                        fromUser: this.userId
+                    });
+
+                    if (allowed) {
+                        this.recordingInitiator = fromUser;
+                        this.showRecordingIndicators();
+                        this.addLog('Recording permission granted');
+                    } else {
+                        this.addLog('Recording permission denied');
+                    }
+
+                } catch (error) {
+                    this.addLog(`Error handling recording request: ${error.message}`);
+                    document.body.removeChild(permissionDialog);
+                }
+            }
+
+            async handleRecordingResponse(data) {
+                const { allowed, fromUser } = data.data;
+
+                try {
+                    // Verify this is the initiator
+                    if (this.recordingInitiator !== this.userId) {
+                        return;
+                    }
+
+                    // Track permission response
+                    this.recordingPermissions.set(fromUser, allowed);
+                    this.addLog(`Recording permission ${allowed ? 'granted' : 'denied'} by ${fromUser}`);
+
+                    // Check if we have all required permissions
+                    const allResponsesReceived = this.requiredPermissions.size === this.recordingPermissions.size;
+                    const allPermissionsGranted = Array.from(this.recordingPermissions.values()).every(p => p);
+
+                    if (allResponsesReceived) {
+                        if (allPermissionsGranted) {
+                            await this.startRecording();
+                            this.addLog('All peers granted recording permission');
+                        } else {
+                            this.addLog('Recording cancelled - permission denied by one or more peers');
+                            this.resetRecordingState();
+                        }
+                    }
+
+                } catch (error) {
+                    this.addLog(`Error handling recording response: ${error.message}`);
+                    this.resetRecordingState();
+                }
+            }
+
+            resetRecordingState() {
+                this.recordingInitiator = null;
+                this.recordingPermissions.clear();
+                this.requiredPermissions.clear();
+                document.getElementById('startRecording').disabled = false;
+                this.hideRecordingIndicators();
             }
 
             async createPeerConnection(peerId, isInitiator) {
@@ -605,410 +1006,6 @@
                     this.updateConnectionStatus('error', 'Connection failed');
                 }
             }
-
-            async handleRecordingResponse(data) {
-                const { allowed, fromUser } = data.data;
-
-                try {
-                    // Verify this is the initiator
-                    if (this.recordingInitiator !== this.userId) {
-                        return;
-                    }
-
-                    // Track permission response
-                    this.recordingPermissions.set(fromUser, allowed);
-                    this.addLog(`Recording permission ${allowed ? 'granted' : 'denied'} by ${fromUser}`);
-
-                    // Check if we have all required permissions
-                    const allResponsesReceived = this.requiredPermissions.size === this.recordingPermissions.size;
-                    const allPermissionsGranted = Array.from(this.recordingPermissions.values()).every(p => p);
-
-                    if (allResponsesReceived) {
-                        if (allPermissionsGranted) {
-                            await this.startRecording();
-                            this.addLog('All peers granted recording permission');
-                        } else {
-                            this.addLog('Recording cancelled - permission denied by one or more peers');
-                            this.resetRecordingState();
-                        }
-                    }
-
-                } catch (error) {
-                    this.addLog(`Error handling recording response: ${error.message}`);
-                    this.resetRecordingState();
-                }
-            }
-
-            resetRecordingState() {
-                this.recordingInitiator = null;
-                this.recordingPermissions.clear();
-                this.requiredPermissions.clear();
-                document.getElementById('startRecording').disabled = false;
-                this.hideRecordingIndicators();
-            }
-
-            setupCombinedCanvas() {
-                this.combinedCanvas = document.createElement('canvas');
-                this.combinedCanvas.width = 1280;  // 640 * 2
-                this.combinedCanvas.height = 480;
-                this.combinedContext = this.combinedCanvas.getContext('2d');
-            }
-
-            async setupAudioMixer() {
-                this.audioContext = new AudioContext();
-                this.audioDestination = this.audioContext.createMediaStreamDestination();
-            }
-
-            async handleRecordingRequest(data) {
-                const { fromUser } = data.data;
-                console.log('Received recording request from:', fromUser);
-
-                // Create and show the permission dialog
-                const permissionDialog = document.createElement('div');
-                permissionDialog.className = 'permission-dialog';
-                permissionDialog.innerHTML = `
-        <div class="dialog-content">
-            <h3>Recording Permission</h3>
-            <p>User ${fromUser} wants to record this call</p>
-            <div class="dialog-buttons">
-                <button id="allowRecording" class="allow-btn">Allow</button>
-                <button id="denyRecording" class="deny-btn">Deny</button>
-            </div>
-        </div>
-    `;
-
-                // Add styles if not already added
-                if (!document.getElementById('permission-dialog-styles')) {
-                    const style = document.createElement('style');
-                    style.id = 'permission-dialog-styles';
-                    style.textContent = `
-            .permission-dialog {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.5);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                z-index: 1000;
-            }
-            .dialog-content {
-                background: white;
-                padding: 20px;
-                border-radius: 8px;
-                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            }
-            .dialog-buttons {
-                margin-top: 15px;
-                text-align: center;
-            }
-            .allow-btn {
-                background: #4CAF50;
-                color: white;
-                margin-right: 10px;
-            }
-            .deny-btn {
-                background: #f44336;
-                color: white;
-            }
-            .dialog-buttons button {
-                padding: 8px 16px;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-            }
-        `;
-                    document.head.appendChild(style);
-                }
-                document.body.appendChild(permissionDialog);
-
-                try {
-                    const allowed = await new Promise((resolve) => {
-                        document.getElementById('allowRecording').onclick = () => {
-                            permissionDialog.remove();
-                            resolve(true);
-                        };
-                        document.getElementById('denyRecording').onclick = () => {
-                            permissionDialog.remove();
-                            resolve(false);
-                        };
-                    });
-
-                    // Send response back to initiator
-                    this.sendSignalingMessage('recordingResponse', fromUser, {
-                        allowed: allowed,
-                        fromUser: this.userId
-                    });
-
-                    if (allowed) {
-                        this.recordingInitiator = fromUser;
-                        this.showRecordingIndicators();
-                        this.addLog('Recording permission granted');
-                    } else {
-                        this.addLog('Recording permission denied');
-                    }
-
-                } catch (error) {
-                    this.addLog(`Error handling recording request: ${error.message}`);
-                    document.body.removeChild(permissionDialog);
-                }
-            }
-
-
-            async requestRecording() {
-                if (this.isRecording) {
-                    this.addLog('Recording already in progress');
-                    return;
-                }
-
-                try {
-                    // Reset permissions tracking
-                    this.recordingPermissions.clear();
-                    this.requiredPermissions.clear();
-
-                    // If no peers, start recording directly
-                    if (this.peers.size === 0) {
-                        this.addLog('No peers connected - starting solo recording');
-                        await this.startRecording();
-                        return;
-                    }
-
-                    // Track required permissions
-                    this.peers.forEach((_, peerId) => {
-                        this.requiredPermissions.add(peerId);
-                    });
-
-                    // Send recording request to all peers
-                    this.sendSignalingMessage('recordingRequest', null, {
-                        fromUser: this.userId,
-                        room: this.room,
-                        timestamp: Date.now()
-                    });
-
-                    // Update UI
-                    document.getElementById('startRecording').disabled = true;
-                    this.recordingInitiator = this.userId;
-                    this.addLog('Recording permission requested from peers');
-
-                } catch (error) {
-                    this.addLog(`Error requesting recording permission: ${error.message}`);
-                    this.resetRecordingState();
-                }
-            }
-
-            async startRecording() {
-                try {
-                    // Verify streams exist
-                    if (!this.localStream) {
-                        throw new Error('Local stream not available');
-                    }
-
-                    // Get remote stream from the first peer connection
-                    const firstPeer = this.peers.values().next().value;
-                    if (!firstPeer || !firstPeer.getReceivers()[0].track) {
-                        throw new Error('Remote stream not available');
-                    }
-
-                    // Create MediaStream for remote tracks
-                    const remoteStream = new MediaStream();
-                    firstPeer.getReceivers().forEach(receiver => {
-                        remoteStream.addTrack(receiver.track);
-                    });
-
-                    // Initialize recording chunks
-                    this.localChunks = [];
-                    this.remoteChunks = [];
-
-                    // Set up canvas for combined video
-                    this.setupCombinedCanvas();
-                    await this.setupAudioMixer();
-
-                    // Mix audio streams
-                    const localAudioSource = this.audioContext.createMediaStreamSource(this.localStream);
-                    const remoteAudioSource = this.audioContext.createMediaStreamSource(remoteStream);
-                    localAudioSource.connect(this.audioDestination);
-                    remoteAudioSource.connect(this.audioDestination);
-
-                    // Create combined video stream
-                    const combinedStream = this.combinedCanvas.captureStream();
-                    // Add audio to combined stream
-                    this.audioDestination.stream.getAudioTracks().forEach(track => {
-                        combinedStream.addTrack(track);
-                    });
-
-                    // Initialize combined recorder
-                    this.combinedRecorder = new MediaRecorder(combinedStream);
-                    const combinedChunks = [];
-
-                    this.combinedRecorder.ondataavailable = e => combinedChunks.push(e.data);
-                    this.combinedRecorder.onstop = () => {
-                        this.saveCombinedRecording(combinedChunks);
-                    };
-
-                    // Start recording and frame composition
-                    this.combinedRecorder.start();
-                    this.drawCombinedFrame();
-                    this.isRecording = true;
-
-                    // Update UI
-                    this.showRecordingIndicators();
-                    document.getElementById('startRecording').disabled = true;
-                    document.getElementById('stopRecording').disabled = false;
-
-                    // Notify all peers that recording has started
-                    this.sendSignalingMessage('recordingStarted', null, {
-                        fromUser: this.userId
-                    });
-
-                    this.addLog('Recording started successfully');
-                } catch (error) {
-                    this.addLog(`Error starting recording: ${error.message}`);
-                    this.isRecording = false;
-                    document.getElementById('startRecording').disabled = false;
-
-                    // Clean up resources if initialization failed
-                    if (this.audioContext) {
-                        await this.audioContext.close();
-                        this.audioContext = null;
-                    }
-                    this.combinedRecorder = null;
-                }
-            }
-
-            showRecordingIndicators() {
-                document.getElementById('localRecordingIndicator').style.display = 'block';
-                document.getElementById('localRecordingBadge').style.display = 'block';
-                document.getElementById('remoteRecordingIndicator').style.display = 'block';
-                document.getElementById('remoteRecordingBadge').style.display = 'block';
-            }
-
-            hideRecordingIndicators() {
-                document.getElementById('localRecordingIndicator').style.display = 'none';
-                document.getElementById('localRecordingBadge').style.display = 'none';
-                document.getElementById('remoteRecordingIndicator').style.display = 'none';
-                document.getElementById('remoteRecordingBadge').style.display = 'none';
-            }
-
-            drawCombinedFrame() {
-                if (this.combinedRecorder && this.combinedRecorder.state === 'recording') {
-                    // Clear the canvas
-                    this.combinedContext.fillStyle = '#000';
-                    this.combinedContext.fillRect(0, 0, this.combinedCanvas.width, this.combinedCanvas.height);
-
-                    // Draw local video on the left side
-                    const localVideo = document.getElementById('localVideo');
-                    this.combinedContext.drawImage(localVideo, 0, 0, this.combinedCanvas.width / 2, this.combinedCanvas.height);
-
-                    // Draw remote video on the right side
-                    const remoteVideo = document.getElementById('remoteVideo');
-                    this.combinedContext.drawImage(remoteVideo, this.combinedCanvas.width / 2, 0, this.combinedCanvas.width / 2, this.combinedCanvas.height);
-
-                    // Continue the frame composition loop
-                    requestAnimationFrame(() => this.drawCombinedFrame());
-                }
-            }
-
-            async stopRecording() {
-                try {
-                    if (this.localRecorder && this.localRecorder.state === 'recording') {
-                        this.localRecorder.stop();
-                        this.addLog('Stopped recording local stream');
-                    }
-
-                    if (this.remoteRecorder && this.remoteRecorder.state === 'recording') {
-                        this.remoteRecorder.stop();
-                        this.addLog('Stopped recording remote stream');
-                    }
-
-                    if (this.combinedRecorder && this.combinedRecorder.state === 'recording') {
-                        this.combinedRecorder.stop();
-                        this.addLog('Stopped recording combined stream');
-                    }
-
-                    // Close audio context
-                    if (this.audioContext) {
-                        await this.audioContext.close();
-                    }
-
-                    // Reset recorders and audio context
-                    this.localRecorder = null;
-                    this.remoteRecorder = null;
-                    this.combinedRecorder = null;
-                    this.audioContext = null;
-                    this.audioDestination = null;
-                    this.isRecording = false;
-
-                    // Reset UI
-                    document.getElementById('startRecording').disabled = false;
-                    document.getElementById('stopRecording').disabled = true;
-
-                } catch (error) {
-                    this.addLog(`Error stopping recording: ${error.message}`);
-                    console.error('Stop recording error:', error);
-                }
-            }
-
-            saveCombinedRecording(chunks) {
-                try {
-                    if (chunks.length === 0) {
-                        this.addLog('No combined recording data available');
-                        return;
-                    }
-
-                    const blob = new Blob(chunks, {
-                        type: 'video/webm;codecs=vp8,opus'
-                    });
-
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `recording-session-${this.currentSessionId}-${new Date().toISOString()}.webm`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-
-                    this.addLog('Saved combined recording with audio');
-                } catch (error) {
-                    this.addLog(`Error saving combined recording: ${error.message}`);
-                    console.error('Save recording error:', error);
-                }
-            }
-
-            updateRecordingUI(isRecording) {
-                const localIndicator = document.getElementById('localRecordingIndicator');
-                const remoteIndicator = document.getElementById('remoteRecordingIndicator');
-                const localBadge = document.getElementById('localRecordingBadge');
-                const remoteBadge = document.getElementById('remoteRecordingBadge');
-
-                if (isRecording) {
-                    localIndicator.style.display = 'block';
-                    remoteIndicator.style.display = 'block';
-                    localBadge.style.display = 'block';
-                    remoteBadge.style.display = 'block';
-                } else {
-                    localIndicator.style.display = 'none';
-                    remoteIndicator.style.display = 'none';
-                    localBadge.style.display = 'none';
-                    remoteBadge.style.display = 'none';
-                }
-            }
-
-            bindUIElements() {
-                document.getElementById('startButton').onclick = () => this.start();
-                document.getElementById('hangupButton').onclick = () => this.hangup();
-                document.getElementById('startRecording').onclick = () => this.requestRecording();
-                document.getElementById('stopRecording').onclick = () => this.stopRecording();
-            }
-
-            updateRecordingButtonStates() {
-                const hasStreams = localStream && document.getElementById('remoteVideo').srcObject;
-                document.getElementById('startRecording').disabled = !hasStreams;
-                document.getElementById('stopRecording').disabled = true;
-            }
-
         }
         // Initialize the client
         const webRTCClient = new WebRTCClient();
