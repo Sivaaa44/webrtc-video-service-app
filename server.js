@@ -37,8 +37,13 @@ class Session {
 
     addParticipant(userId, ws) {
         if (this.participants.size >= this.maxParticipants) {
+            ws.send(JSON.stringify({
+                type: 'roomFull',
+                message: 'This room has reached its maximum capacity'
+            }));
             throw new Error('Session is full');
         }
+
 
         this.participants.set(userId, ws);
         ws.sessionId = this.id;
@@ -181,6 +186,28 @@ wss.on('connection', (ws) => {
                     if (!roomId) {
                         throw new Error('Room ID is required');
                     }
+                    
+                    // Check if room exists and is full before creating/finding session
+                    const existingRoomSessions = roomSessions.get(roomId);
+                    if (existingRoomSessions) {
+                        let isRoomFull = true;
+                        for (const sessionId of existingRoomSessions) {
+                            const session = sessions.get(sessionId);
+                            if (session && session.isAvailable()) {
+                                isRoomFull = false;
+                                break;
+                            }
+                        }
+                        
+                        if (isRoomFull) {
+                            ws.send(JSON.stringify({
+                                type: 'roomFull',
+                                message: 'This room has reached its maximum capacity'
+                            }));
+                            return;
+                        }
+                    }
+                    
                     const session = findOrCreateSession(roomId);
                     session.addParticipant(userId, ws);
                     break;
