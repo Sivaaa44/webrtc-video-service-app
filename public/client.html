@@ -4,209 +4,288 @@
 <head>
     <title>WebRTC Video Chat</title>
     <style>
+        /* Base styles */
+        :root {
+            --primary: #007bff;
+            --primary-dark: #0056b3;
+            --danger: #dc3545;
+            --danger-dark: #c82333;
+            --success: #28a745;
+            --warning: #ffc107;
+            --light: #f8f9fa;
+            --dark: #343a40;
+            --gray: #6c757d;
+            --shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --border-radius: 8px;
+            --spacing-sm: 10px;
+            --spacing-md: 15px;
+            --spacing-lg: 20px;
+        }
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: var(--spacing-lg);
             background-color: #f5f5f5;
+            color: var(--dark);
+            line-height: 1.5;
         }
 
-        .room-info {
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        /* Card-like containers */
+        .room-info,
+        .controls,
+        .status-log {
+            background-color: white;
+            padding: var(--spacing-md);
+            border-radius: var(--border-radius);
+            margin-bottom: var(--spacing-lg);
+            box-shadow: var(--shadow);
         }
 
+        .room-info h2 {
+            margin-top: 0;
+            color: var(--dark);
+        }
+
+        /* Video container and elements */
         .video-container {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin: 20px 0;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: var(--spacing-lg);
+            margin: var(--spacing-lg) 0;
         }
 
         .video-wrapper {
             position: relative;
-        }
-
-        .video-label {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background-color: rgba(0, 0, 0, 0.5);
-            color: white;
-            padding: 5px 10px;
-            border-radius: 4px;
+            background-color: var(--dark);
+            border-radius: var(--border-radius);
+            overflow: hidden;
         }
 
         video {
             width: 100%;
-            max-width: 600px;
-            border-radius: 8px;
-            background-color: #333;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            aspect-ratio: 16/9;
+            background-color: var(--dark);
+            border-radius: var(--border-radius);
         }
 
+        .video-label {
+            position: absolute;
+            top: var(--spacing-sm);
+            left: var(--spacing-sm);
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 5px var(--spacing-sm);
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        /* Controls and buttons */
         .controls {
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            gap: var(--spacing-sm);
+            flex-wrap: wrap;
+            justify-content: center;
         }
 
         button {
-            margin: 0 10px;
-            padding: 10px 20px;
+            padding: var(--spacing-sm) var(--spacing-lg);
             border: none;
             border-radius: 4px;
-            background-color: #007bff;
+            background-color: var(--primary);
             color: white;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: background-color 0.2s, transform 0.1s;
+            font-weight: 500;
         }
 
-        button:hover {
-            background-color: #0056b3;
+        button:hover:not(:disabled) {
+            background-color: var(--primary-dark);
+            transform: translateY(-1px);
         }
 
         button:disabled {
-            background-color: #ccc;
+            background-color: var(--gray);
             cursor: not-allowed;
+            opacity: 0.7;
         }
 
         #hangupButton {
-            background-color: #dc3545;
+            background-color: var(--danger);
         }
 
-        #hangupButton:hover {
-            background-color: #c82333;
+        #hangupButton:hover:not(:disabled) {
+            background-color: var(--danger-dark);
         }
 
-        .status-log {
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            max-height: 200px;
-            overflow-y: auto;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        .mic-button {
+            background-color: var(--success);
         }
 
-        .log-entry {
-            margin: 5px 0;
-            padding: 5px;
-            border-bottom: 1px solid #eee;
+        .mic-button.muted {
+            background-color: var(--danger);
         }
 
+        /* Status indicators */
         .connection-status {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 4px;
+            padding: var(--spacing-sm);
+            margin: var(--spacing-sm) 0;
+            border-radius: var(--border-radius);
             text-align: center;
-            font-weight: bold;
+            font-weight: 500;
         }
 
         .status-connecting {
-            background-color: #fff3cd;
-            color: #856404;
+            background-color: var(--warning);
+            color: var(--dark);
         }
 
         .status-connected {
-            background-color: #d4edda;
-            color: #155724;
+            background-color: var(--success);
+            color: white;
         }
 
         .status-disconnected {
-            background-color: #f8d7da;
-            color: #721c24;
+            background-color: var(--danger);
+            color: white;
+        }
+
+        /* Recording and Mute indicators - hidden by default */
+        .recording-indicator,
+        .recording-badge,
+        .muted-indicator {
+            display: none; /* Hide by default */
+            position: absolute;
+            border-radius: var(--border-radius);
         }
 
         .recording-indicator {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            border: 3px solid #ff4444;
-            border-radius: 8px;
+            inset: 0;
+            border: 3px solid var(--danger);
             pointer-events: none;
-            display: none;
         }
 
         .recording-badge {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background-color: #ff4444;
+            top: var(--spacing-sm);
+            right: var(--spacing-sm);
+            background-color: var(--danger);
             color: white;
-            padding: 5px 10px;
+            padding: 5px var(--spacing-sm);
             border-radius: 4px;
-            font-size: 12px;
-            display: none;
+            font-size: 0.85rem;
         }
 
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
+        /* Updated muted indicator positioning */
+        .muted-indicator {
+            bottom: var(--spacing-sm); /* Changed from top to bottom */
+            right: var(--spacing-sm);
+            background-color: var(--danger);
+            color: white;
+            padding: 5px var(--spacing-sm);
+            border-radius: 4px;
+            font-size: 0.85rem;
+            z-index: 10;
         }
 
-        .modal-content {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            max-width: 400px;
-            width: 90%;
+        /* Log section */
+        .status-log {
+            max-height: 200px;
+            overflow-y: auto;
         }
 
-        .modal-title {
-            color: #dc3545;
+        .status-log h3 {
             margin-top: 0;
         }
 
-        .modal-button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-top: 15px;
+        .log-entry {
+            padding: var(--spacing-sm);
+            border-bottom: 1px solid #eee;
+            font-size: 0.9rem;
         }
 
-        .modal-button:hover {
-            background-color: #0056b3;
+        /* Modal styles */
+        .modal {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            backdrop-filter: blur(4px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal.active,
+        .modal.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background-color: white;
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            max-width: 400px;
+            width: 90%;
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .modal.active .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-title {
+            color: var(--danger);
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-md);
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            body {
+                padding: var(--spacing-sm);
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+
+            .video-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Utility classes */
+        .share-url {
+            color: var(--primary);
+            text-decoration: none;
+            word-break: break-all;
+        }
+
+        .share-url:hover {
+            text-decoration: underline;
+            color: var(--primary-dark);
         }
     </style>
 </head>
 
 <body>
-    <div id="roomFullModal" class="modal">
-        <div class="modal-content">
-            <h2 class="modal-title">Room is Full</h2>
-            <p>This room has reached its maximum capacity of 2 participants.</p>
-            <p>Room ID: <strong id="modalRoomId"></strong></p>
-            <button class="modal-button" onclick="window.location.href='/'">Return to Home</button>
-        </div>
-    </div>
     <div class="room-info">
         <h2>WebRTC Video Chat</h2>
         <p>Room ID: <strong id="roomDisplay">Generating...</strong></p>
-        <p>Share this URL with others to join: <span id="shareUrl"></span></p>
+        <p>Share this URL with others to join: <a href="#" class="share-url" id="shareUrl"></a></p>
         <div id="participantCount">Participants: 0</div>
     </div>
 
@@ -220,18 +299,21 @@
             <video id="localVideo" autoplay muted playsinline></video>
             <div class="recording-indicator" id="localRecordingIndicator"></div>
             <div class="recording-badge" id="localRecordingBadge">Recording</div>
+            <div class="muted-indicator" id="mutedIndicator">Muted</div>
         </div>
         <div class="video-wrapper">
             <div class="video-label">Remote Video</div>
             <video id="remoteVideo" autoplay playsinline></video>
             <div class="recording-indicator" id="remoteRecordingIndicator"></div>
             <div class="recording-badge" id="remoteRecordingBadge">Recording</div>
+            <div class="muted-indicator" id="remoteMutedIndicator">Muted</div>
         </div>
     </div>
 
     <div class="controls">
         <button id="startButton">Start Call</button>
         <button id="hangupButton" disabled>End Call</button>
+        <button id="micButton" class="mic-button" disabled>Mute Mic</button>
         <button id="startRecording" disabled>Start Recording</button>
         <button id="stopRecording" disabled>Stop Recording</button>
     </div>
@@ -241,6 +323,14 @@
         <div id="logContainer"></div>
     </div>
 
+    <div id="roomFullModal" class="modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Room is Full</h2>
+            <p class="modal-text">This room has reached its maximum capacity of 2 participants.</p>
+            <p class="modal-text">Room ID: <strong id="modalRoomId"></strong></p>
+            <button class="btn btn-primary" onclick="window.location.href='/'">Return to Home</button>
+        </div>
+    </div>
 
     <script>
         // Constants and Configuration
@@ -279,6 +369,8 @@
                 this.requiredPermissions = new Set();
                 this.recordingInitiator = null;
                 this.isRecording = false;
+                this.isMuted = false;
+                this.remoteMuted = false;
 
                 // Initialize
                 this.updateParticipantCount();
@@ -288,7 +380,67 @@
                 // Display room information
                 document.getElementById('roomDisplay').textContent = this.room;
                 const shareUrl = `${window.location.origin}${window.location.pathname}?room=${this.room}`;
-                document.getElementById('shareUrl').textContent = shareUrl;
+                const shareUrlElement = document.getElementById('shareUrl');
+                shareUrlElement.href = shareUrl;
+                shareUrlElement.textContent = shareUrl;
+            }
+
+            showRoomFullModal() {
+                const modal = document.getElementById('roomFullModal');
+                document.getElementById('modalRoomId').textContent = this.room;
+                modal.classList.add('show');
+
+                // Disconnect from current room
+                this.hangup();
+
+                // Update status
+                this.updateConnectionStatus('error', 'Room is full');
+                this.addLog('Cannot join - room is full')
+            }
+
+            toggleMicrophone() {
+                if (!this.localStream) {
+                    this.addLog('No local stream available');
+                    return;
+                }
+
+                const audioTrack = this.localStream.getAudioTracks()[0];
+                if (audioTrack) {
+                    this.isMuted = !this.isMuted;
+                    audioTrack.enabled = !this.isMuted;
+
+                    // Update button state
+                    const micButton = document.getElementById('micButton');
+                    micButton.textContent = this.isMuted ? 'Unmute Mic' : 'Mute Mic';
+                    micButton.classList.toggle('muted', this.isMuted);
+
+                    // Show/hide muted indicator
+                    document.getElementById('mutedIndicator').style.display = 
+                        this.isMuted ? 'block' : 'none';
+
+                    // Send mute state to peers
+                    this.sendSignalingMessage('muteStatus', null, {
+                        isMuted: this.isMuted
+                    });
+
+                    this.addLog(`Microphone ${this.isMuted ? 'muted' : 'unmuted'}`);
+                } else {
+                    this.addLog('No audio track found');
+                }
+            }
+
+            // Add method to update UI for mute status
+            updateMuteUI(isMuted, isLocal) {
+                const elementPrefix = isLocal ? '' : 'remote';
+                const mutedIndicator = document.getElementById(`${elementPrefix}MutedIndicator`);
+
+                if (isLocal) {
+                    const micButton = document.getElementById('micButton');
+                    micButton.textContent = isMuted ? 'Unmute Mic' : 'Mute Mic';
+                    micButton.classList.toggle('muted', isMuted);
+                }
+
+                mutedIndicator.style.display = isMuted ? 'block' : 'none';
             }
 
             generateRoomId() {
@@ -326,17 +478,12 @@
                 };
             }
 
-            showRoomFullModal() {
-                const modal = document.getElementById('roomFullModal');
-                document.getElementById('modalRoomId').textContent = this.room;
-                modal.style.display = 'block';
-            }
-
             updateParticipantCount() {
                 const count = this.peers.size + 1; // Add 1 for self
                 this.participantCount = count;
                 document.getElementById('participantCount').textContent = `Participants: ${count}`;
             }
+
 
             setupCombinedCanvas() {
                 this.combinedCanvas = document.createElement('canvas');
@@ -349,7 +496,6 @@
                 this.audioContext = new AudioContext();
                 this.audioDestination = this.audioContext.createMediaStreamDestination();
             }
-
             async requestRecording() {
                 if (this.isRecording) {
                     this.addLog('Recording already in progress');
@@ -390,6 +536,7 @@
                     this.resetRecordingState();
                 }
             }
+
 
             async startRecording() {
                 try {
@@ -533,6 +680,9 @@
                     this.audioDestination = null;
                     this.isRecording = false;
 
+                    this.resetRecordingState();
+                    //this.updateRecordingUI(false);
+
                     // Reset UI
                     document.getElementById('startRecording').disabled = false;
                     document.getElementById('stopRecording').disabled = true;
@@ -589,11 +739,13 @@
                 }
             }
 
+
             bindUIElements() {
                 document.getElementById('startButton').onclick = () => this.start();
                 document.getElementById('hangupButton').onclick = () => this.hangup();
                 document.getElementById('startRecording').onclick = () => this.requestRecording();
                 document.getElementById('stopRecording').onclick = () => this.stopRecording();
+                document.getElementById('micButton').onclick = () => this.toggleMicrophone();
             }
 
             updateRecordingButtonStates() {
@@ -601,6 +753,7 @@
                 document.getElementById('startRecording').disabled = !hasStreams;
                 document.getElementById('stopRecording').disabled = true;
             }
+
 
             async handleSignalingMessage(data) {
                 console.log('Received signal:', data.type, data);
@@ -628,7 +781,7 @@
                         break;
 
                     case 'newPeer':
-                    if (this.peers.size >= this.maxParticipants - 1) {
+                        if (this.peers.size >= this.maxParticipants - 1) {
                             this.sendSignalingMessage('roomFull', data.userId, {
                                 room: this.room
                             });
@@ -638,6 +791,7 @@
                         await this.createPeerConnection(data.userId, false);//data.userid is the peerid of the remote user
                         this.updateParticipantCount();
                         break;
+
 
                     case 'offer':
                         await this.handleOffer(data.from, data.data);
@@ -658,7 +812,7 @@
 
                     case 'recordingRequest':
                         console.log('Got recording request', data);
-                        if (data.data.fromUser !== this.userId) {//to make sure the request is not from the user itself
+                        if (data.data.fromUser !== this.userId) {
                             await this.handleRecordingRequest(data);
                         }
                         break;
@@ -677,6 +831,10 @@
                     case 'recordingStopped':
                         this.updateRecordingUI(false);
                         this.addLog('Recording stopped');
+                        break;
+
+                    case 'muteStatus':
+                        this.handleRemoteMuteStatus(data.from, data.data.isMuted);
                         break;
                 }
             }
@@ -811,6 +969,13 @@
                 }
             }
 
+            handleRemoteMuteStatus(peerId, isMuted) {
+                this.remoteMuted = isMuted;
+                document.getElementById('remoteMutedIndicator').style.display = 
+                    isMuted ? 'block' : 'none';
+                this.addLog(`Remote peer ${isMuted ? 'muted' : 'unmuted'} their microphone`);
+            }
+
             resetRecordingState() {
                 this.recordingInitiator = null;
                 this.recordingPermissions.clear();
@@ -818,6 +983,7 @@
                 document.getElementById('startRecording').disabled = false;
                 this.hideRecordingIndicators();
             }
+
 
             async createPeerConnection(peerId, isInitiator) {
                 try {
@@ -847,7 +1013,7 @@
                         }
                     };
 
-                    // gets triggered during incoming remote video / audio track
+                    // Handle remote tracks
                     pc.ontrack = (event) => {
                         this.handleRemoteTrack(event, peerId);
                     };
@@ -883,7 +1049,6 @@
 
             async handleOffer(peerId, offer) {
                 try {
-                    //we need the pc instance before fully establishinh the p2p conn. the remote details are stored in the pc instance only.
                     let pc = this.peers.get(peerId);
                     if (!pc) {
                         pc = await this.createPeerConnection(peerId, false);
@@ -891,7 +1056,6 @@
 
                     await pc.setRemoteDescription(new RTCSessionDescription(offer));
                     const answer = await pc.createAnswer();
-                    //an active rtcconn is required to create an answer
                     await pc.setLocalDescription(answer);
                     this.sendSignalingMessage('answer', peerId, answer);
                 } catch (err) {
@@ -971,6 +1135,10 @@
                     this.peers.delete(peerId);
                 }
 
+                // Reset remote mute state when peer disconnects
+                this.remoteMuted = false;
+                this.updateMuteUI(false, false);
+
                 this.updateParticipantCount();
 
                 if (this.peers.size === 0) {
@@ -1005,6 +1173,13 @@
                     }
 
                     document.getElementById('localVideo').srcObject = this.localStream;
+                    document.getElementById('micButton').disabled = false;
+
+                    this.isMuted = false;
+                    this.remoteMuted = false;
+                    document.getElementById('mutedIndicator').style.display = 'none';
+                    document.getElementById('remoteMutedIndicator').style.display = 'none';
+
                     this.addLog('Media access granted');
 
                     // Join session with room ID
@@ -1042,8 +1217,18 @@
                 // Notify server
                 this.sendSignalingMessage('leave', null, null);
                 this.updateConnectionStatus('disconnected', 'Call ended');
+                this.resetRecordingState();
+
+                this.isMuted = false;
+                this.remoteMuted = false;
+                document.getElementById('mutedIndicator').style.display = 'none';
+                document.getElementById('remoteMutedIndicator').style.display = 'none';
+                document.getElementById('micButton').disabled = true;
+                document.getElementById('micButton').classList.remove('muted');
+
             }
 
+            // Helper methods
             addLog(message) {
                 const logContainer = document.getElementById('logContainer');
                 const logEntry = document.createElement('div');
@@ -1082,7 +1267,9 @@
                     this.updateConnectionStatus('error', 'Connection failed');
                 }
             }
+
         }
+
         // Initialize the client
         const webRTCClient = new WebRTCClient();
 
