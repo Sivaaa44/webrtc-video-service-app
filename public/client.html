@@ -4,125 +4,279 @@
 <head>
     <title>WebRTC Video Chat</title>
     <style>
+        /* Base styles */
+        :root {
+            --primary: #007bff;
+            --primary-dark: #0056b3;
+            --danger: #dc3545;
+            --danger-dark: #c82333;
+            --success: #28a745;
+            --warning: #ffc107;
+            --light: #f8f9fa;
+            --dark: #343a40;
+            --gray: #6c757d;
+            --shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --border-radius: 8px;
+            --spacing-sm: 10px;
+            --spacing-md: 15px;
+            --spacing-lg: 20px;
+        }
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: var(--spacing-lg);
             background-color: #f5f5f5;
+            color: var(--dark);
+            line-height: 1.5;
         }
 
-        .room-info {
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        /* Card-like containers */
+        .room-info,
+        .controls,
+        .status-log {
+            background-color: white;
+            padding: var(--spacing-md);
+            border-radius: var(--border-radius);
+            margin-bottom: var(--spacing-lg);
+            box-shadow: var(--shadow);
         }
 
+        .room-info h2 {
+            margin-top: 0;
+            color: var(--dark);
+        }
+
+        /* Video container and elements */
         .video-container {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin: 20px 0;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: var(--spacing-lg);
+            margin: var(--spacing-lg) 0;
         }
 
         .video-wrapper {
             position: relative;
-        }
-
-        .video-label {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background-color: rgba(0, 0, 0, 0.5);
-            color: white;
-            padding: 5px 10px;
-            border-radius: 4px;
+            background-color: var(--dark);
+            border-radius: var(--border-radius);
+            overflow: hidden;
         }
 
         video {
             width: 100%;
-            max-width: 600px;
-            border-radius: 8px;
-            background-color: #333;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            aspect-ratio: 16/9;
+            background-color: var(--dark);
+            border-radius: var(--border-radius);
         }
 
+        .video-label {
+            position: absolute;
+            top: var(--spacing-sm);
+            left: var(--spacing-sm);
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 5px var(--spacing-sm);
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        /* Controls and buttons */
         .controls {
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            gap: var(--spacing-sm);
+            flex-wrap: wrap;
+            justify-content: center;
         }
 
         button {
-            margin: 0 10px;
-            padding: 10px 20px;
+            padding: var(--spacing-sm) var(--spacing-lg);
             border: none;
             border-radius: 4px;
-            background-color: #007bff;
+            background-color: var(--primary);
             color: white;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: background-color 0.2s, transform 0.1s;
+            font-weight: 500;
         }
 
-        button:hover {
-            background-color: #0056b3;
+        button:hover:not(:disabled) {
+            background-color: var(--primary-dark);
+            transform: translateY(-1px);
         }
 
         button:disabled {
-            background-color: #ccc;
+            background-color: var(--gray);
             cursor: not-allowed;
+            opacity: 0.7;
         }
 
         #hangupButton {
-            background-color: #dc3545;
+            background-color: var(--danger);
         }
 
-        #hangupButton:hover {
-            background-color: #c82333;
+        #hangupButton:hover:not(:disabled) {
+            background-color: var(--danger-dark);
         }
 
-        .status-log {
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            max-height: 200px;
-            overflow-y: auto;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        .mic-button {
+            background-color: var(--success);
         }
 
-        .log-entry {
-            margin: 5px 0;
-            padding: 5px;
-            border-bottom: 1px solid #eee;
+        .mic-button.muted {
+            background-color: var(--danger);
         }
 
+        /* Status indicators */
         .connection-status {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 4px;
+            padding: var(--spacing-sm);
+            margin: var(--spacing-sm) 0;
+            border-radius: var(--border-radius);
             text-align: center;
-            font-weight: bold;
+            font-weight: 500;
         }
 
         .status-connecting {
-            background-color: #fff3cd;
-            color: #856404;
+            background-color: var(--warning);
+            color: var(--dark);
         }
 
         .status-connected {
-            background-color: #d4edda;
-            color: #155724;
+            background-color: var(--success);
+            color: white;
         }
 
         .status-disconnected {
-            background-color: #f8d7da;
-            color: #721c24;
+            background-color: var(--danger);
+            color: white;
+        }
+
+        /* Recording and Mute indicators - hidden by default */
+        .recording-indicator,
+        .recording-badge,
+        .muted-indicator {
+            display: none; /* Hide by default */
+            position: absolute;
+            border-radius: var(--border-radius);
+        }
+
+        .recording-indicator {
+            inset: 0;
+            border: 3px solid var(--danger);
+            pointer-events: none;
+        }
+
+        .recording-badge {
+            top: var(--spacing-sm);
+            right: var(--spacing-sm);
+            background-color: var(--danger);
+            color: white;
+            padding: 5px var(--spacing-sm);
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+
+        /* Updated muted indicator positioning */
+        .muted-indicator {
+            bottom: var(--spacing-sm); /* Changed from top to bottom */
+            right: var(--spacing-sm);
+            background-color: var(--danger);
+            color: white;
+            padding: 5px var(--spacing-sm);
+            border-radius: 4px;
+            font-size: 0.85rem;
+            z-index: 10;
+        }
+
+        /* Log section */
+        .status-log {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .status-log h3 {
+            margin-top: 0;
+        }
+
+        .log-entry {
+            padding: var(--spacing-sm);
+            border-bottom: 1px solid #eee;
+            font-size: 0.9rem;
+        }
+
+        /* Modal styles */
+        .modal {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            backdrop-filter: blur(4px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal.active,
+        .modal.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background-color: white;
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            max-width: 400px;
+            width: 90%;
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .modal.active .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-title {
+            color: var(--danger);
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-md);
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            body {
+                padding: var(--spacing-sm);
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+
+            .video-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Utility classes */
+        .share-url {
+            color: var(--primary);
+            text-decoration: none;
+            word-break: break-all;
+        }
+
+        .share-url:hover {
+            text-decoration: underline;
+            color: var(--primary-dark);
         }
     </style>
 </head>
@@ -131,7 +285,7 @@
     <div class="room-info">
         <h2>WebRTC Video Chat</h2>
         <p>Room ID: <strong id="roomDisplay">Generating...</strong></p>
-        <p>Share this URL with others to join: <span id="shareUrl"></span></p>
+        <p>Share this URL with others to join: <a href="#" class="share-url" id="shareUrl"></a></p>
         <div id="participantCount">Participants: 0</div>
     </div>
 
@@ -143,16 +297,23 @@
         <div class="video-wrapper">
             <div class="video-label">Your Video</div>
             <video id="localVideo" autoplay muted playsinline></video>
+            <div class="recording-indicator" id="localRecordingIndicator"></div>
+            <div class="recording-badge" id="localRecordingBadge">Recording</div>
+            <div class="muted-indicator" id="mutedIndicator">Muted</div>
         </div>
         <div class="video-wrapper">
             <div class="video-label">Remote Video</div>
             <video id="remoteVideo" autoplay playsinline></video>
+            <div class="recording-indicator" id="remoteRecordingIndicator"></div>
+            <div class="recording-badge" id="remoteRecordingBadge">Recording</div>
+            <div class="muted-indicator" id="remoteMutedIndicator">Muted</div>
         </div>
     </div>
 
     <div class="controls">
         <button id="startButton">Start Call</button>
         <button id="hangupButton" disabled>End Call</button>
+        <button id="micButton" class="mic-button" disabled>Mute Mic</button>
         <button id="startRecording" disabled>Start Recording</button>
         <button id="stopRecording" disabled>Stop Recording</button>
     </div>
@@ -162,964 +323,956 @@
         <div id="logContainer"></div>
     </div>
 
+    <div id="roomFullModal" class="modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Room is Full</h2>
+            <p class="modal-text">This room has reached its maximum capacity of 2 participants.</p>
+            <p class="modal-text">Room ID: <strong id="modalRoomId"></strong></p>
+            <button class="btn btn-primary" onclick="window.location.href='/'">Return to Home</button>
+        </div>
+    </div>
+
     <script>
-        const generateRoomId = () => Math.random().toString(36).substring(7);
-        const room = new URLSearchParams(window.location.search).get('room') || generateRoomId();
-
-        document.getElementById('roomDisplay').textContent = room;
-        const shareUrl = `${window.location.origin}${window.location.pathname}?room=${room}`;
-        document.getElementById('shareUrl').textContent = shareUrl;
-
-        let peerConnection;
-        let localStream;
-        const ws = new WebSocket('ws://localhost:8080');
-
+        // Constants and Configuration
         const config = {
             iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' }
-            ]
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ],
+            iceCandidatePoolSize: 10
         };
 
-        function addLog(message) {
-            const logContainer = document.getElementById('logContainer');
-            const logEntry = document.createElement('div');
-            logEntry.className = 'log-entry';
-            logEntry.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
-            logContainer.insertBefore(logEntry, logContainer.firstChild);
-        }
+        class WebRTCClient {
+            constructor() {
+                this.room = new URLSearchParams(window.location.search).get('room') || this.generateRoomId();
+                this.userId = Math.random().toString(36).substring(7);
+                this.peers = new Map();
+                this.localStream = null;
+                this.ws = null;
+                this.reconnectAttempts = 0;
+                this.maxReconnectAttempts = 5;
+                this.reconnectInterval = 2000;
+                this.participantCount = 1;
+                this.maxParticipants = 2;
 
-        function updateConnectionStatus(status, message) {
-            const statusDiv = document.getElementById('connectionStatus');
-            statusDiv.className = `connection-status status-${status}`;
-            statusDiv.textContent = message;
-        }
+                // Recording-specific properties
+                this.localChunks = [];
+                this.remoteChunks = [];
+                this.localRecorder = null;
+                this.remoteRecorder = null;
+                this.combinedRecorder = null;
+                this.combinedCanvas = null;
+                this.combinedContext = null;
+                this.audioContext = null;
+                this.audioDestination = null;
+                this.recordingPermissions = new Map();
+                this.requiredPermissions = new Set();
+                this.recordingInitiator = null;
+                this.isRecording = false;
+                this.isMuted = false;
+                this.remoteMuted = false;
 
-        function waitForWebSocketConnection(ws) {
-            return new Promise((resolve, reject) => {
-                if (ws.readyState === WebSocket.OPEN) {
-                    resolve();
-                } else {
-                    ws.addEventListener('open', () => resolve(), { once: true });
-                    ws.addEventListener('error', (err) => reject(err), { once: true });
+                // Initialize
+                this.updateParticipantCount();
+                this.initializeWebSocket();
+                this.bindUIElements();
+
+                // Display room information
+                document.getElementById('roomDisplay').textContent = this.room;
+                const shareUrl = `${window.location.origin}${window.location.pathname}?room=${this.room}`;
+                const shareUrlElement = document.getElementById('shareUrl');
+                shareUrlElement.href = shareUrl;
+                shareUrlElement.textContent = shareUrl;
+            }
+
+            showRoomFullModal() {
+                const modal = document.getElementById('roomFullModal');
+                document.getElementById('modalRoomId').textContent = this.room;
+                modal.classList.add('show');
+
+                // Disconnect from current room
+                this.hangup();
+
+                // Update status
+                this.updateConnectionStatus('error', 'Room is full');
+                this.addLog('Cannot join - room is full')
+            }
+
+            toggleMicrophone() {
+                if (!this.localStream) {
+                    this.addLog('No local stream available');
+                    return;
                 }
-            });
-        }
 
-        // Usage in your start function
-        async function start() {
-            try {
-                document.getElementById('startButton').disabled = true;
-                updateConnectionStatus('connecting', 'Connecting...');
-                addLog('Requesting camera and microphone access...');
+                const audioTrack = this.localStream.getAudioTracks()[0];
+                if (audioTrack) {
+                    this.isMuted = !this.isMuted;
+                    audioTrack.enabled = !this.isMuted;
 
-                // Wait for WebSocket to connect
-                await waitForWebSocketConnection(ws);
-                addLog('WebSocket connection established');
+                    // Update button state
+                    const micButton = document.getElementById('micButton');
+                    micButton.textContent = this.isMuted ? 'Unmute Mic' : 'Mute Mic';
+                    micButton.classList.toggle('muted', this.isMuted);
 
-                // Get local media
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: true,
-                    audio: true
+                    // Show/hide muted indicator
+                    document.getElementById('mutedIndicator').style.display = 
+                        this.isMuted ? 'block' : 'none';
+
+                    // Send mute state to peers
+                    this.sendSignalingMessage('muteStatus', null, {
+                        isMuted: this.isMuted
+                    });
+
+                    this.addLog(`Microphone ${this.isMuted ? 'muted' : 'unmuted'}`);
+                } else {
+                    this.addLog('No audio track found');
+                }
+            }
+
+            // Add method to update UI for mute status
+            updateMuteUI(isMuted, isLocal) {
+                const elementPrefix = isLocal ? '' : 'remote';
+                const mutedIndicator = document.getElementById(`${elementPrefix}MutedIndicator`);
+
+                if (isLocal) {
+                    const micButton = document.getElementById('micButton');
+                    micButton.textContent = isMuted ? 'Unmute Mic' : 'Mute Mic';
+                    micButton.classList.toggle('muted', isMuted);
+                }
+
+                mutedIndicator.style.display = isMuted ? 'block' : 'none';
+            }
+
+            generateRoomId() {
+                return Math.random().toString(36).substring(7);
+            }
+
+            initializeWebSocket() {
+                this.ws = new WebSocket('ws://localhost:8080');
+
+                this.ws.onopen = () => {
+                    this.reconnectAttempts = 0;
+                    this.addLog('Connected to signaling server');
+                    this.updateConnectionStatus('ready', 'Ready to connect');
+                    document.getElementById('startButton').disabled = false;
+                };
+
+                this.ws.onclose = () => {
+                    this.addLog('Disconnected from signaling server');
+                    this.updateConnectionStatus('disconnected', 'Signaling server disconnected');
+                    this.handleWebSocketReconnection();
+                };
+
+                this.ws.onerror = (error) => {
+                    this.addLog(`WebSocket error: ${error.message}`);
+                    this.updateConnectionStatus('error', 'Connection error');
+                };
+
+                this.ws.onmessage = async (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        await this.handleSignalingMessage(data);
+                    } catch (err) {
+                        this.addLog(`Error handling message: ${err.message}`);
+                    }
+                };
+            }
+
+            updateParticipantCount() {
+                const count = this.peers.size + 1; // Add 1 for self
+                this.participantCount = count;
+                document.getElementById('participantCount').textContent = `Participants: ${count}`;
+            }
+
+
+            setupCombinedCanvas() {
+                this.combinedCanvas = document.createElement('canvas');
+                this.combinedCanvas.width = 1280;  // 640 * 2
+                this.combinedCanvas.height = 480;
+                this.combinedContext = this.combinedCanvas.getContext('2d');
+            }
+
+            async setupAudioMixer() {
+                this.audioContext = new AudioContext();
+                this.audioDestination = this.audioContext.createMediaStreamDestination();
+            }
+            async requestRecording() {
+                if (this.isRecording) {
+                    this.addLog('Recording already in progress');
+                    return;
+                }
+
+                try {
+                    // Reset permissions tracking
+                    this.recordingPermissions.clear();
+                    this.requiredPermissions.clear();
+
+                    // If no peers, start recording directly
+                    if (this.peers.size === 0) {
+                        this.addLog('No peers connected - starting solo recording');
+                        await this.startRecording();
+                        return;
+                    }
+
+                    // Track required permissions
+                    this.peers.forEach((_, peerId) => {
+                        this.requiredPermissions.add(peerId);
+                    });
+
+                    // Send recording request to all peers
+                    this.sendSignalingMessage('recordingRequest', null, {
+                        fromUser: this.userId,
+                        room: this.room,
+                        timestamp: Date.now()
+                    });
+
+                    // Update UI
+                    document.getElementById('startRecording').disabled = true;
+                    this.recordingInitiator = this.userId;
+                    this.addLog('Recording permission requested from peers');
+
+                } catch (error) {
+                    this.addLog(`Error requesting recording permission: ${error.message}`);
+                    this.resetRecordingState();
+                }
+            }
+
+
+            async startRecording() {
+                try {
+                    // Verify streams exist
+                    if (!this.localStream) {
+                        throw new Error('Local stream not available');
+                    }
+
+                    // Get remote stream from the first peer connection
+                    const firstPeer = this.peers.values().next().value;
+                    if (!firstPeer || !firstPeer.getReceivers()[0].track) {
+                        throw new Error('Remote stream not available');
+                    }
+
+                    // Create MediaStream for remote tracks
+                    const remoteStream = new MediaStream();
+                    firstPeer.getReceivers().forEach(receiver => {
+                        remoteStream.addTrack(receiver.track);
+                    });
+
+                    // Initialize recording chunks
+                    this.localChunks = [];
+                    this.remoteChunks = [];
+
+                    // Set up canvas for combined video
+                    this.setupCombinedCanvas();
+                    await this.setupAudioMixer();
+
+                    // Mix audio streams
+                    const localAudioSource = this.audioContext.createMediaStreamSource(this.localStream);
+                    const remoteAudioSource = this.audioContext.createMediaStreamSource(remoteStream);
+                    localAudioSource.connect(this.audioDestination);
+                    remoteAudioSource.connect(this.audioDestination);
+
+                    // Create combined video stream
+                    const combinedStream = this.combinedCanvas.captureStream();
+                    // Add audio to combined stream
+                    this.audioDestination.stream.getAudioTracks().forEach(track => {
+                        combinedStream.addTrack(track);
+                    });
+
+                    // Initialize combined recorder
+                    this.combinedRecorder = new MediaRecorder(combinedStream);
+                    const combinedChunks = [];
+
+                    this.combinedRecorder.ondataavailable = e => combinedChunks.push(e.data);
+                    this.combinedRecorder.onstop = () => {
+                        this.saveCombinedRecording(combinedChunks);
+                    };
+
+                    // Start recording and frame composition
+                    this.combinedRecorder.start();
+                    this.drawCombinedFrame();
+                    this.isRecording = true;
+
+                    // Update UI
+                    this.showRecordingIndicators();
+                    document.getElementById('startRecording').disabled = true;
+                    document.getElementById('stopRecording').disabled = false;
+
+                    // Notify all peers that recording has started
+                    this.sendSignalingMessage('recordingStarted', null, {
+                        fromUser: this.userId
+                    });
+
+                    this.addLog('Recording started successfully');
+                } catch (error) {
+                    this.addLog(`Error starting recording: ${error.message}`);
+                    this.isRecording = false;
+                    document.getElementById('startRecording').disabled = false;
+
+                    // Clean up resources if initialization failed
+                    if (this.audioContext) {
+                        await this.audioContext.close();
+                        this.audioContext = null;
+                    }
+                    this.combinedRecorder = null;
+                }
+            }
+
+            showRecordingIndicators() {
+                document.getElementById('localRecordingIndicator').style.display = 'block';
+                document.getElementById('localRecordingBadge').style.display = 'block';
+                document.getElementById('remoteRecordingIndicator').style.display = 'block';
+                document.getElementById('remoteRecordingBadge').style.display = 'block';
+            }
+
+            hideRecordingIndicators() {
+                document.getElementById('localRecordingIndicator').style.display = 'none';
+                document.getElementById('localRecordingBadge').style.display = 'none';
+                document.getElementById('remoteRecordingIndicator').style.display = 'none';
+                document.getElementById('remoteRecordingBadge').style.display = 'none';
+            }
+
+            drawCombinedFrame() {
+                if (this.combinedRecorder && this.combinedRecorder.state === 'recording') {
+                    // Clear the canvas
+                    this.combinedContext.fillStyle = '#000';
+                    this.combinedContext.fillRect(0, 0, this.combinedCanvas.width, this.combinedCanvas.height);
+
+                    // Draw local video on the left side
+                    const localVideo = document.getElementById('localVideo');
+                    this.combinedContext.drawImage(localVideo, 0, 0, this.combinedCanvas.width / 2, this.combinedCanvas.height);
+
+                    // Draw remote video on the right side
+                    const remoteVideo = document.getElementById('remoteVideo');
+                    this.combinedContext.drawImage(remoteVideo, this.combinedCanvas.width / 2, 0, this.combinedCanvas.width / 2, this.combinedCanvas.height);
+
+                    // Continue the frame composition loop
+                    requestAnimationFrame(() => this.drawCombinedFrame());
+                }
+            }
+
+            async stopRecording() {
+                try {
+                    if (this.localRecorder && this.localRecorder.state === 'recording') {
+                        this.localRecorder.stop();
+                        this.addLog('Stopped recording local stream');
+                    }
+
+                    if (this.remoteRecorder && this.remoteRecorder.state === 'recording') {
+                        this.remoteRecorder.stop();
+                        this.addLog('Stopped recording remote stream');
+                    }
+
+                    if (this.combinedRecorder && this.combinedRecorder.state === 'recording') {
+                        this.combinedRecorder.stop();
+                        this.addLog('Stopped recording combined stream');
+                    }
+
+                    // Close audio context
+                    if (this.audioContext) {
+                        await this.audioContext.close();
+                    }
+
+                    // Reset recorders and audio context
+                    this.localRecorder = null;
+                    this.remoteRecorder = null;
+                    this.combinedRecorder = null;
+                    this.audioContext = null;
+                    this.audioDestination = null;
+                    this.isRecording = false;
+
+                    this.resetRecordingState();
+                    //this.updateRecordingUI(false);
+
+                    // Reset UI
+                    document.getElementById('startRecording').disabled = false;
+                    document.getElementById('stopRecording').disabled = true;
+
+                } catch (error) {
+                    this.addLog(`Error stopping recording: ${error.message}`);
+                    console.error('Stop recording error:', error);
+                }
+            }
+
+            saveCombinedRecording(chunks) {
+                try {
+                    if (chunks.length === 0) {
+                        this.addLog('No combined recording data available');
+                        return;
+                    }
+
+                    const blob = new Blob(chunks, {
+                        type: 'video/webm;codecs=vp8,opus'
+                    });
+
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `recording-session-${this.currentSessionId}-${new Date().toISOString()}.webm`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+
+                    this.addLog('Saved combined recording with audio');
+                } catch (error) {
+                    this.addLog(`Error saving combined recording: ${error.message}`);
+                    console.error('Save recording error:', error);
+                }
+            }
+
+            updateRecordingUI(isRecording) {
+                const localIndicator = document.getElementById('localRecordingIndicator');
+                const remoteIndicator = document.getElementById('remoteRecordingIndicator');
+                const localBadge = document.getElementById('localRecordingBadge');
+                const remoteBadge = document.getElementById('remoteRecordingBadge');
+
+                if (isRecording) {
+                    localIndicator.style.display = 'block';
+                    remoteIndicator.style.display = 'block';
+                    localBadge.style.display = 'block';
+                    remoteBadge.style.display = 'block';
+                } else {
+                    localIndicator.style.display = 'none';
+                    remoteIndicator.style.display = 'none';
+                    localBadge.style.display = 'none';
+                    remoteBadge.style.display = 'none';
+                }
+            }
+
+
+            bindUIElements() {
+                document.getElementById('startButton').onclick = () => this.start();
+                document.getElementById('hangupButton').onclick = () => this.hangup();
+                document.getElementById('startRecording').onclick = () => this.requestRecording();
+                document.getElementById('stopRecording').onclick = () => this.stopRecording();
+                document.getElementById('micButton').onclick = () => this.toggleMicrophone();
+            }
+
+            updateRecordingButtonStates() {
+                const hasStreams = localStream && document.getElementById('remoteVideo').srcObject;
+                document.getElementById('startRecording').disabled = !hasStreams;
+                document.getElementById('stopRecording').disabled = true;
+            }
+
+
+            async handleSignalingMessage(data) {
+                console.log('Received signal:', data.type, data);
+                switch (data.type) {
+                    case 'roomFull':
+                        this.showRoomFullModal();
+                        break;
+
+                    case 'sessionInfo':
+                        if (data.peers.length >= this.maxParticipants) {
+                            this.showRoomFullModal();
+                            // Disconnect from signaling server
+                            if (this.ws) {
+                                this.ws.close();
+                            }
+                            return;
+                        }
+                        this.currentSessionId = data.sessionId;
+                        this.addLog(`Joined session: ${this.currentSessionId}`);
+                        this.updateConnectionStatus('connecting', 'Waiting for peers...');
+                        for (const peerId of data.peers) {
+                            await this.createPeerConnection(peerId, true);//iterates over all the peers present in the session and creates a conn 
+                        }
+                        this.updateParticipantCount();
+                        break;
+
+                    case 'newPeer':
+                        if (this.peers.size >= this.maxParticipants - 1) {
+                            this.sendSignalingMessage('roomFull', data.userId, {
+                                room: this.room
+                            });
+                            return;
+                        }
+                        this.addLog(`New peer joined: ${data.userId}`);
+                        await this.createPeerConnection(data.userId, false);//data.userid is the peerid of the remote user
+                        this.updateParticipantCount();
+                        break;
+
+
+                    case 'offer':
+                        await this.handleOffer(data.from, data.data);
+                        break;
+
+                    case 'answer':
+                        await this.handleAnswer(data.from, data.data);
+                        break;
+
+                    case 'candidate':
+                        await this.handleCandidate(data.from, data.data);
+                        break;
+
+                    case 'peerLeft':
+                        this.handlePeerDisconnection(data.userId);
+                        this.updateParticipantCount();
+                        break;
+
+                    case 'recordingRequest':
+                        console.log('Got recording request', data);
+                        if (data.data.fromUser !== this.userId) {
+                            await this.handleRecordingRequest(data);
+                        }
+                        break;
+
+                    case 'recordingResponse':
+                        console.log('Got recording response', data);
+                        await this.handleRecordingResponse(data);
+                        break;
+
+
+                    case 'recordingStarted':
+                        this.updateRecordingUI(true);
+                        this.addLog('Call is being recorded');
+                        break;
+
+                    case 'recordingStopped':
+                        this.updateRecordingUI(false);
+                        this.addLog('Recording stopped');
+                        break;
+
+                    case 'muteStatus':
+                        this.handleRemoteMuteStatus(data.from, data.data.isMuted);
+                        break;
+                }
+            }
+
+            async handleRecordingRequest(data) {
+                const { fromUser } = data.data;
+                console.log('Received recording request from:', fromUser);
+
+                // Create and show the permission dialog
+                const permissionDialog = document.createElement('div');
+                permissionDialog.className = 'permission-dialog';
+                permissionDialog.innerHTML = `
+        <div class="dialog-content">
+            <h3>Recording Permission</h3>
+            <p>User ${fromUser} wants to record this call</p>
+            <div class="dialog-buttons">
+                <button id="allowRecording" class="allow-btn">Allow</button>
+                <button id="denyRecording" class="deny-btn">Deny</button>
+            </div>
+        </div>
+    `;
+
+                // Add styles if not already added
+                if (!document.getElementById('permission-dialog-styles')) {
+                    const style = document.createElement('style');
+                    style.id = 'permission-dialog-styles';
+                    style.textContent = `
+            .permission-dialog {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;
+            }
+            .dialog-content {
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+            .dialog-buttons {
+                margin-top: 15px;
+                text-align: center;
+            }
+            .allow-btn {
+                background: #4CAF50;
+                color: white;
+                margin-right: 10px;
+            }
+            .deny-btn {
+                background: #f44336;
+                color: white;
+            }
+            .dialog-buttons button {
+                padding: 8px 16px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+        `;
+                    document.head.appendChild(style);
+                }
+                document.body.appendChild(permissionDialog);
+
+                try {
+                    const allowed = await new Promise((resolve) => {
+                        document.getElementById('allowRecording').onclick = () => {
+                            permissionDialog.remove();
+                            resolve(true);
+                        };
+                        document.getElementById('denyRecording').onclick = () => {
+                            permissionDialog.remove();
+                            resolve(false);
+                        };
+                    });
+
+                    // Send response back to initiator
+                    this.sendSignalingMessage('recordingResponse', fromUser, {
+                        allowed: allowed,
+                        fromUser: this.userId
+                    });
+
+                    if (allowed) {
+                        this.recordingInitiator = fromUser;
+                        this.showRecordingIndicators();
+                        this.addLog('Recording permission granted');
+                    } else {
+                        this.addLog('Recording permission denied');
+                    }
+
+                } catch (error) {
+                    this.addLog(`Error handling recording request: ${error.message}`);
+                    document.body.removeChild(permissionDialog);
+                }
+            }
+
+            async handleRecordingResponse(data) {
+                const { allowed, fromUser } = data.data;
+
+                try {
+                    // Verify this is the initiator
+                    if (this.recordingInitiator !== this.userId) {
+                        return;
+                    }
+
+                    // Track permission response
+                    this.recordingPermissions.set(fromUser, allowed);
+                    this.addLog(`Recording permission ${allowed ? 'granted' : 'denied'} by ${fromUser}`);
+
+                    // Check if we have all required permissions
+                    const allResponsesReceived = this.requiredPermissions.size === this.recordingPermissions.size;
+                    const allPermissionsGranted = Array.from(this.recordingPermissions.values()).every(p => p);
+
+                    if (allResponsesReceived) {
+                        if (allPermissionsGranted) {
+                            await this.startRecording();
+                            this.addLog('All peers granted recording permission');
+                        } else {
+                            this.addLog('Recording cancelled - permission denied by one or more peers');
+                            this.resetRecordingState();
+                        }
+                    }
+
+                } catch (error) {
+                    this.addLog(`Error handling recording response: ${error.message}`);
+                    this.resetRecordingState();
+                }
+            }
+
+            handleRemoteMuteStatus(peerId, isMuted) {
+                this.remoteMuted = isMuted;
+                document.getElementById('remoteMutedIndicator').style.display = 
+                    isMuted ? 'block' : 'none';
+                this.addLog(`Remote peer ${isMuted ? 'muted' : 'unmuted'} their microphone`);
+            }
+
+            resetRecordingState() {
+                this.recordingInitiator = null;
+                this.recordingPermissions.clear();
+                this.requiredPermissions.clear();
+                document.getElementById('startRecording').disabled = false;
+                this.hideRecordingIndicators();
+            }
+
+
+            async createPeerConnection(peerId, isInitiator) {
+                try {
+                    const pc = new RTCPeerConnection(config);
+                    this.peers.set(peerId, pc);
+
+                    // Handle ICE candidates
+                    pc.onicecandidate = ({ candidate }) => {
+                        if (candidate) {
+                            this.sendSignalingMessage('candidate', peerId, candidate);
+                        }
+                    };
+
+                    // Monitor ICE connection state
+                    pc.oniceconnectionstatechange = () => {
+                        this.handleICEConnectionStateChange(pc, peerId);
+                    };
+
+                    // Handle negotiation needed
+                    pc.onnegotiationneeded = async () => {
+                        try {
+                            if (isInitiator) {
+                                await this.createAndSendOffer(pc, peerId);
+                            }
+                        } catch (err) {
+                            this.addLog(`Negotiation failed: ${err.message}`);
+                        }
+                    };
+
+                    // Handle remote tracks
+                    pc.ontrack = (event) => {
+                        this.handleRemoteTrack(event, peerId);
+                    };
+
+                    // Add local tracks
+                    if (this.localStream) {
+                        this.localStream.getTracks().forEach(track => {
+                            pc.addTrack(track, this.localStream);
+                        });
+                    }
+
+                    if (isInitiator) {
+                        await this.createAndSendOffer(pc, peerId);
+                    }
+
+                    return pc;
+                } catch (err) {
+                    this.addLog(`Failed to create peer connection: ${err.message}`);
+                    throw err;
+                }
+            }
+
+            async createAndSendOffer(pc, peerId) {
+                try {
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    this.sendSignalingMessage('offer', peerId, offer);
+                } catch (err) {
+                    this.addLog(`Failed to create offer: ${err.message}`);
+                    throw err;
+                }
+            }
+
+            async handleOffer(peerId, offer) {
+                try {
+                    let pc = this.peers.get(peerId);
+                    if (!pc) {
+                        pc = await this.createPeerConnection(peerId, false);
+                    }
+
+                    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    this.sendSignalingMessage('answer', peerId, answer);
+                } catch (err) {
+                    this.addLog(`Failed to handle offer: ${err.message}`);
+                }
+            }
+
+            async handleAnswer(peerId, answer) {
+                try {
+                    const pc = this.peers.get(peerId);
+                    if (pc) {
+                        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+                    }
+                } catch (err) {
+                    this.addLog(`Failed to handle answer: ${err.message}`);
+                }
+            }
+
+            async handleCandidate(peerId, candidate) {
+                try {
+                    const pc = this.peers.get(peerId);
+                    if (pc) {
+                        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                    }
+                } catch (err) {
+                    this.addLog(`Failed to handle ICE candidate: ${err.message}`);
+                }
+            }
+
+            handleICEConnectionStateChange(pc, peerId) {
+                this.addLog(`ICE connection state with peer ${peerId}: ${pc.iceConnectionState}`);
+
+                switch (pc.iceConnectionState) {
+                    case 'failed':
+                        // Attempt ICE restart
+                        this.restartICE(pc, peerId);
+                        break;
+                    case 'disconnected':
+                        // Wait briefly for potential recovery
+                        setTimeout(() => {
+                            if (pc.iceConnectionState === 'disconnected') {
+                                this.restartICE(pc, peerId);
+                            }
+                        }, 3000);
+                        break;
+                    case 'connected':
+                        this.updateConnectionStatus('connected', 'Connected');
+                        break;
+                }
+            }
+
+            async restartICE(pc, peerId) {
+                try {
+                    const offer = await pc.createOffer({ iceRestart: true });
+                    await pc.setLocalDescription(offer);
+                    this.sendSignalingMessage('offer', peerId, offer);
+                } catch (err) {
+                    this.addLog(`ICE restart failed: ${err.message}`);
+                    this.handlePeerDisconnection(peerId);
+                }
+            }
+
+            handleRemoteTrack(event, peerId) {
+                const remoteVideo = document.getElementById('remoteVideo');
+                if (remoteVideo.srcObject !== event.streams[0]) {
+                    remoteVideo.srcObject = event.streams[0];
+                    this.addLog(`Receiving media from peer: ${peerId}`);
+                    this.updateConnectionStatus('connected', 'Connected');
+                    document.getElementById('startRecording').disabled = false;
+                }
+            }
+
+            handlePeerDisconnection(peerId) {
+                const pc = this.peers.get(peerId);
+                if (pc) {
+                    pc.close();
+                    this.peers.delete(peerId);
+                }
+
+                // Reset remote mute state when peer disconnects
+                this.remoteMuted = false;
+                this.updateMuteUI(false, false);
+
+                this.updateParticipantCount();
+
+                if (this.peers.size === 0) {
+                    const remoteVideo = document.getElementById('remoteVideo');
+                    remoteVideo.srcObject = null;
+                    this.updateConnectionStatus('disconnected', 'No peers connected');
+                    document.getElementById('startRecording').disabled = true;
+                }
+            }
+
+            async start() {
+                try {
+                    document.getElementById('startButton').disabled = true;
+                    this.updateConnectionStatus('connecting', 'Getting media access...');
+                    this.sessionStartTime = new Date().toISOString();
+                    // Get local media with fallback
+                    try {
+                        this.localStream = await navigator.mediaDevices.getUserMedia({
+                            video: true,
+                            audio: true
+                        });
+                    } catch (err) {
+                        // Fallback to audio only if video fails
+                        if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                            this.localStream = await navigator.mediaDevices.getUserMedia({
+                                audio: true
+                            });
+                            this.addLog('No camera detected, audio only mode');
+                        } else {
+                            throw err;
+                        }
+                    }
+
+                    document.getElementById('localVideo').srcObject = this.localStream;
+                    document.getElementById('micButton').disabled = false;
+
+                    this.isMuted = false;
+                    this.remoteMuted = false;
+                    document.getElementById('mutedIndicator').style.display = 'none';
+                    document.getElementById('remoteMutedIndicator').style.display = 'none';
+
+                    this.addLog('Media access granted');
+
+                    // Join session with room ID
+                    this.sendSignalingMessage('join', null, null);
+                    document.getElementById('hangupButton').disabled = false;
+
+                } catch (err) {
+                    this.addLog(`Start failed: ${err.message}`);
+                    this.updateConnectionStatus('error', 'Failed to start');
+                    document.getElementById('startButton').disabled = false;
+                }
+            }
+
+            hangup() {
+                this.addLog('Ending call');
+
+                // Close all peer connections
+                this.peers.forEach((pc, peerId) => {
+                    this.handlePeerDisconnection(peerId);
                 });
-                document.getElementById('localVideo').srcObject = localStream;
-                addLog('Camera and microphone access granted');
 
-                // Create peer connection
-                createPeerConnection();
+                // Stop local media
+                if (this.localStream) {
+                    this.localStream.getTracks().forEach(track => track.stop());
+                    this.localStream = null;
+                }
 
-                // Join room
-                ws.send(JSON.stringify({
-                    type: 'join',
-                    room: room
-                }));
-                addLog('Joined room: ' + room);
-
-                // Create and send offer
-                const offer = await peerConnection.createOffer();
-                await peerConnection.setLocalDescription(offer);
-                sendSignal(offer);
-                addLog('Created and sent connection offer');
-                document.getElementById('hangupButton').disabled = false;
-            } catch (err) {
-                addLog('Error: ' + err.message);
-                updateConnectionStatus('disconnected', 'Connection failed');
+                // Reset UI
+                document.getElementById('localVideo').srcObject = null;
+                document.getElementById('remoteVideo').srcObject = null;
                 document.getElementById('startButton').disabled = false;
-                console.error(err);
-            }
-        }
-
-        async function createPeerConnection() {
-            peerConnection = new RTCPeerConnection(config);
-            addLog('Created new peer connection');
-
-            // Add local tracks to peer connection
-            localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
-            });
-
-            // Handle incoming tracks
-            peerConnection.ontrack = event => {
-                document.getElementById('remoteVideo').srcObject = event.streams[0];
-                addLog('Received remote video stream');
-                updateConnectionStatus('connected', 'Connected');
-                document.getElementById('startRecording').disabled = false
-            };
-
-            // Handle connection state changes
-            peerConnection.oniceconnectionstatechange = () => {
-                addLog('ICE connection state: ' + peerConnection.iceConnectionState);
-                if (peerConnection.iceConnectionState === 'disconnected') {
-                    updateConnectionStatus('disconnected', 'Disconnected');
-                }
-            };
-
-            // Handle and send ICE candidates
-            peerConnection.onicecandidate = event => {
-                if (event.candidate) {
-                    sendSignal({
-                        type: 'candidate',
-                        candidate: event.candidate
-                    });
-                    addLog('Sent ICE candidate');
-                }
-            };
-        }
-
-        function sendSignal(signal) {
-            ws.send(JSON.stringify({
-                type: 'signal',
-                room: room,
-                signal: signal
-            }));
-        }
-
-        // Handle incoming signals
-        ws.onmessage = async (event) => {
-            const data = JSON.parse(event.data);
-
-            if (data.type === 'roomStatus') {
-                document.getElementById('participantCount').textContent =
-                    `Participants: ${data.participants}`;
-                return;
-            }
-
-            try {
-                if (data.type === 'offer') {
-                    addLog('Received connection offer');
-                    if (!peerConnection) {
-                        await start();
-                    }
-                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
-                    const answer = await peerConnection.createAnswer();
-                    await peerConnection.setLocalDescription(answer);
-                    sendSignal(answer);
-                    addLog('Sent connection answer');
-                }
-                else if (data.type === 'answer') {
-                    addLog('Received connection answer');
-                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
-                }
-                else if (data.type === 'candidate') {
-                    addLog('Received ICE candidate');
-                    await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-                }
-            } catch (err) {
-                addLog('Error: ' + err.message);
-                console.error(err);
-            }
-        };
-
-        ws.onopen = () => {
-            addLog('Connected to signaling server');
-            document.getElementById('startButton').disabled = false;
-            updateConnectionStatus('ready', 'Ready to connect');
-        };
-
-        ws.onclose = () => {
-            addLog('Disconnected from signaling server');
-            updateConnectionStatus('disconnected', 'Signaling server disconnected');
-        }
-
-        function hangup() {
-            addLog('Ending call');
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
-            }
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-            }
-            document.getElementById('localVideo').srcObject = null;
-            document.getElementById('remoteVideo').srcObject = null;
-            document.getElementById('startButton').disabled = false;
-            document.getElementById('hangupButton').disabled = true;
-            updateConnectionStatus('disconnected', 'Call ended');
-        }
-        let localChunks = [];
-        let remoteChunks = [];
-        let localRecorder, remoteRecorder;
-        let combinedRecorder;
-        let combinedCanvas, combinedContext;
-        let audioContext, audioDestination;
-
-        function setupCombinedCanvas() {
-            combinedCanvas = document.createElement('canvas');
-            combinedCanvas.width = 1280;  // 640 * 2
-            combinedCanvas.height = 480;
-            combinedContext = combinedCanvas.getContext('2d');
-        }
-
-        async function setupAudioMixer() {
-            audioContext = new AudioContext();
-            audioDestination = audioContext.createMediaStreamDestination();
-        }
-
-        async function startRecording() {
-            try {
-                setupCombinedCanvas();
-                await setupAudioMixer();
-
-                if (localStream) {
-                    // Add local audio to the mixer
-                    const localAudioTrack = localStream.getAudioTracks()[0];
-                    if (localAudioTrack) {
-                        const localAudioSource = audioContext.createMediaStreamSource(new MediaStream([localAudioTrack]));
-                        localAudioSource.connect(audioDestination);
-                    }
-
-                    localRecorder = new MediaRecorder(localStream, {
-                        mimeType: 'video/webm;codecs=vp8,opus'
-                    });
-
-                    localRecorder.ondataavailable = (event) => {
-                        if (event.data.size > 0) {
-                            localChunks.push(event.data);
-                        }
-                    };
-
-                    localRecorder.start(1000);
-                    addLog("Local recording started");
-                }
-
-                const remoteVideo = document.getElementById('remoteVideo');
-                const remoteStream = remoteVideo.srcObject;
-                if (remoteStream) {
-                    // Add remote audio to the mixer
-                    const remoteAudioTrack = remoteStream.getAudioTracks()[0];
-                    if (remoteAudioTrack) {
-                        const remoteAudioSource = audioContext.createMediaStreamSource(new MediaStream([remoteAudioTrack]));
-                        remoteAudioSource.connect(audioDestination);
-                    }
-
-                    remoteRecorder = new MediaRecorder(remoteStream, {
-                        mimeType: 'video/webm;codecs=vp8,opus'
-                    });
-
-                    remoteRecorder.ondataavailable = (event) => {
-                        if (event.data.size > 0) {
-                            remoteChunks.push(event.data);
-                        }
-                    };
-
-                    remoteRecorder.start(1000);
-                    addLog("Remote recording started");
-                } else {
-                    addLog("Warning: No remote stream available to record");
-                }
-
-                // Create a combined stream with both video and audio
-                const combinedVideoStream = combinedCanvas.captureStream(30); // 30 FPS
-                const combinedTracks = [
-                    ...combinedVideoStream.getVideoTracks(),
-                    ...audioDestination.stream.getAudioTracks()
-                ];
-                const combinedStream = new MediaStream(combinedTracks);
-
-                combinedRecorder = new MediaRecorder(combinedStream, {
-                    mimeType: 'video/webm;codecs=vp8,opus'
-                });
-
-                const combinedChunks = [];
-                combinedRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        combinedChunks.push(event.data);
-                    }
-                };
-
-                // Start the frame composition loop
-                requestAnimationFrame(drawCombinedFrame);
-                combinedRecorder.start(1000);
-
+                document.getElementById('hangupButton').disabled = true;
                 document.getElementById('startRecording').disabled = true;
-                document.getElementById('stopRecording').disabled = false;
 
-                // Save the combined recording when stopped
-                combinedRecorder.onstop = () => {
-                    saveCombinedRecording(combinedChunks);
-                };
+                // Notify server
+                this.sendSignalingMessage('leave', null, null);
+                this.updateConnectionStatus('disconnected', 'Call ended');
+                this.resetRecordingState();
 
-            } catch (error) {
-                addLog(`Recording failed to start: ${error.message}`);
-                console.error('Recording error:', error);
+                this.isMuted = false;
+                this.remoteMuted = false;
+                document.getElementById('mutedIndicator').style.display = 'none';
+                document.getElementById('remoteMutedIndicator').style.display = 'none';
+                document.getElementById('micButton').disabled = true;
+                document.getElementById('micButton').classList.remove('muted');
+
             }
-        }
 
-        function drawCombinedFrame() {
-            if (combinedRecorder && combinedRecorder.state === 'recording') {
-                // Clear the canvas
-                combinedContext.fillStyle = '#000';
-                combinedContext.fillRect(0, 0, combinedCanvas.width, combinedCanvas.height);
-
-                // Draw local video on the left side
-                const localVideo = document.getElementById('localVideo');
-                combinedContext.drawImage(localVideo, 0, 0, combinedCanvas.width / 2, combinedCanvas.height);
-
-                // Draw remote video on the right side
-                const remoteVideo = document.getElementById('remoteVideo');
-                combinedContext.drawImage(remoteVideo, combinedCanvas.width / 2, 0, combinedCanvas.width / 2, combinedCanvas.height);
-
-                // Continue the frame composition loop
-                requestAnimationFrame(drawCombinedFrame);
+            // Helper methods
+            addLog(message) {
+                const logContainer = document.getElementById('logContainer');
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+                logEntry.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
+                logContainer.insertBefore(logEntry, logContainer.firstChild);
             }
-        }
 
-        async function stopRecording() {
-            try {
-                if (localRecorder && localRecorder.state === 'recording') {
-                    localRecorder.stop();
-                    addLog('Stopped recording local stream');
-                }
-
-                if (remoteRecorder && remoteRecorder.state === 'recording') {
-                    remoteRecorder.stop();
-                    addLog('Stopped recording remote stream');
-                }
-
-                if (combinedRecorder && combinedRecorder.state === 'recording') {
-                    combinedRecorder.stop();
-                    addLog('Stopped recording combined stream');
-                }
-
-                // Close audio context
-                if (audioContext) {
-                    await audioContext.close();
-                }
-
-                // Reset recorders and audio context
-                localRecorder = null;
-                remoteRecorder = null;
-                combinedRecorder = null;
-                audioContext = null;
-                audioDestination = null;
-
-                // Enable/disable appropriate buttons
-                document.getElementById('startRecording').disabled = false;
-                document.getElementById('stopRecording').disabled = true;
-
-            } catch (error) {
-                addLog(`Error stopping recording: ${error.message}`);
-                console.error('Stop recording error:', error);
+            updateConnectionStatus(status, message) {
+                const statusDiv = document.getElementById('connectionStatus');
+                statusDiv.className = `connection-status status-${status}`;
+                statusDiv.textContent = message;
             }
-        }
 
-        function saveCombinedRecording(chunks) {
-            try {
-                if (chunks.length === 0) {
-                    addLog('No combined recording data available');
-                    return;
-                }
-
-                const blob = new Blob(chunks, {
-                    type: 'video/webm;codecs=vp8,opus'
-                });
-
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `combined-recording-${new Date().toISOString()}.webm`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-
-                // Clean up the URL object
-                URL.revokeObjectURL(url);
-
-                addLog('Saved combined recording with audio');
-            } catch (error) {
-                addLog(`Error saving combined recording: ${error.message}`);
-                console.error('Save recording error:', error);
-            }
-        }
-
-        // Update the button states when the call starts/ends
-        function updateRecordingButtonStates() {
-            const hasStreams = localStream && document.getElementById('remoteVideo').srcObject;
-            document.getElementById('startRecording').disabled = !hasStreams;
-            document.getElementById('stopRecording').disabled = true;
-        }
-
-
-        // let localChunk = [];
-        // let remoteChunk = [];
-        // let localRecorder, remoteRecorder;
-
-        // const startRecordingButton = document.getElementById('startRecording');
-        // const stopRecordingButton = document.getElementById('stopRecording');
-
-        // async function startRecording() {
-        //     if (localStream) {
-        //         localRecorder = new MediaRecorder(localStream);
-        //         localRecorder.ondataavailable = (event) => {
-        //             if (event.data.size > 0) {
-        //                 localChunk.push(event.data);
-        //             }
-        //         }
-        //         localRecorder.start();
-        //         addLog("local recording has started")
-        //     }
-
-        //     const remoteVideo = document.getElementById('remoteVideo');
-        //     const remoteStream = remoteVideo.srcObject;
-        //     if (remoteStream) {
-        //         remoteRecorder = new MediaRecorder(remoteStream);
-        //         remoteRecorder.ondataavailable = (event) => {
-        //             if (event.data.size > 0) {
-        //                 remoteChunk.push(event.data);
-        //             }
-        //         }
-        //         remoteRecorder.start();
-        //         addLog("remote recording has started");
-        //     }
-
-        //     startRecordingButton.disabled = true;
-        //     stopRecordingButton.disabled = false;
-        // }
-
-        // async function stopRecording() {
-        //     if (localRecorder) {
-        //         localRecorder.stop();
-        //         localRecorder.onstop = saveLocalRecording;
-        //         addLog('Stopped recording local stream');
-        //     }
-
-        //     if (remoteRecorder) {
-        //         remoteRecorder.stop();
-        //         remoteRecorder.onstop = saveRemoteRecording;
-        //         addLog('Stopped recording remote stream');
-        //     }
-
-        //     startRecordingButton.disabled = false;
-        //     stopRecordingButton.disabled = true;
-        // }
-
-        // function saveLocalRecording() {
-        //     const blob = new Blob(localChunks, { type: 'video/webm' });
-        //     localChunks = [];
-        //     const url = URL.createObjectURL(blob);
-        //     const a = document.createElement('a');
-        //     a.href = url;
-        //     a.download = `local-recording-${new Date().toISOString()}.webm`;
-        //     a.click();
-        //     addLog('Saved local recording');
-        // }
-
-        // function saveRemoteRecording() {
-        //     const blob = new Blob(remoteChunks, { type: 'video/webm' });
-        //     remoteChunks = [];
-        //     const url = URL.createObjectURL(blob);
-        //     const a = document.createElement('a');
-        //     a.href = url;
-        //     a.download = `remote-recording-${new Date().toISOString()}.webm`;
-        //     a.click();
-        //     addLog('Saved remote recording');
-        // }
-
-        let localChunks = [];
-        let remoteChunks = [];
-        let localRecorder, remoteRecorder;
-        let combinedRecorder;
-        let combinedCanvas, combinedContext;
-        let audioContext, audioDestination;
-
-        function setupCombinedCanvas() {
-            combinedCanvas = document.createElement('canvas');
-            combinedCanvas.width = 1280;  // 640 * 2
-            combinedCanvas.height = 480;
-            combinedContext = combinedCanvas.getContext('2d');
-        }
-
-        async function setupAudioMixer() {
-            audioContext = new AudioContext();
-            audioDestination = audioContext.createMediaStreamDestination();
-        }
-
-        async function startRecording() {
-            try {
-                setupCombinedCanvas();
-                await setupAudioMixer();
-
-                if (localStream) {
-                    // Add local audio to the mixer
-                    const localAudioTrack = localStream.getAudioTracks()[0];
-                    if (localAudioTrack) {
-                        const localAudioSource = audioContext.createMediaStreamSource(new MediaStream([localAudioTrack]));
-                        localAudioSource.connect(audioDestination);
-                    }
-
-                    localRecorder = new MediaRecorder(localStream, {
-                        mimeType: 'video/webm;codecs=vp8,opus'
-                    });
-
-                    localRecorder.ondataavailable = (event) => {
-                        if (event.data.size > 0) {
-                            localChunks.push(event.data);
-                        }
-                    };
-
-                    localRecorder.start(1000);
-                    addLog("Local recording started");
-                }
-
-                const remoteVideo = document.getElementById('remoteVideo');
-                const remoteStream = remoteVideo.srcObject;
-                if (remoteStream) {
-                    // Add remote audio to the mixer
-                    const remoteAudioTrack = remoteStream.getAudioTracks()[0];
-                    if (remoteAudioTrack) {
-                        const remoteAudioSource = audioContext.createMediaStreamSource(new MediaStream([remoteAudioTrack]));
-                        remoteAudioSource.connect(audioDestination);
-                    }
-
-                    remoteRecorder = new MediaRecorder(remoteStream, {
-                        mimeType: 'video/webm;codecs=vp8,opus'
-                    });
-
-                    remoteRecorder.ondataavailable = (event) => {
-                        if (event.data.size > 0) {
-                            remoteChunks.push(event.data);
-                        }
-                    };
-
-                    remoteRecorder.start(1000);
-                    addLog("Remote recording started");
+            sendSignalingMessage(type, targetUserId, data) {
+                if (this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type,
+                        userId: this.userId,
+                        targetUserId,
+                        data,
+                        room: this.room
+                    }));
                 } else {
-                    addLog("Warning: No remote stream available to record");
+                    this.addLog('Cannot send message - no connection to server');
                 }
-
-                // Create a combined stream with both video and audio
-                const combinedVideoStream = combinedCanvas.captureStream(30); // 30 FPS
-                const combinedTracks = [
-                    ...combinedVideoStream.getVideoTracks(),
-                    ...audioDestination.stream.getAudioTracks()
-                ];
-                const combinedStream = new MediaStream(combinedTracks);
-
-                combinedRecorder = new MediaRecorder(combinedStream, {
-                    mimeType: 'video/webm;codecs=vp8,opus'
-                });
-
-                const combinedChunks = [];
-                combinedRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        combinedChunks.push(event.data);
-                    }
-                };
-
-                // Start the frame composition loop
-                requestAnimationFrame(drawCombinedFrame);
-                combinedRecorder.start(1000);
-
-                document.getElementById('startRecording').disabled = true;
-                document.getElementById('stopRecording').disabled = false;
-
-                // Save the combined recording when stopped
-                combinedRecorder.onstop = () => {
-                    saveCombinedRecording(combinedChunks);
-                };
-
-            } catch (error) {
-                addLog(`Recording failed to start: ${error.message}`);
-                console.error('Recording error:', error);
             }
-        }
 
-        function drawCombinedFrame() {
-            if (combinedRecorder && combinedRecorder.state === 'recording') {
-                // Clear the canvas
-                combinedContext.fillStyle = '#000';
-                combinedContext.fillRect(0, 0, combinedCanvas.width, combinedCanvas.height);
-
-                // Draw local video on the left side
-                const localVideo = document.getElementById('localVideo');
-                combinedContext.drawImage(localVideo, 0, 0, combinedCanvas.width / 2, combinedCanvas.height);
-
-                // Draw remote video on the right side
-                const remoteVideo = document.getElementById('remoteVideo');
-                combinedContext.drawImage(remoteVideo, combinedCanvas.width / 2, 0, combinedCanvas.width / 2, combinedCanvas.height);
-
-                // Continue the frame composition loop
-                requestAnimationFrame(drawCombinedFrame);
-            }
-        }
-
-        async function stopRecording() {
-            try {
-                if (localRecorder && localRecorder.state === 'recording') {
-                    localRecorder.stop();
-                    addLog('Stopped recording local stream');
-                }
-
-                if (remoteRecorder && remoteRecorder.state === 'recording') {
-                    remoteRecorder.stop();
-                    addLog('Stopped recording remote stream');
-                }
-
-                if (combinedRecorder && combinedRecorder.state === 'recording') {
-                    combinedRecorder.stop();
-                    addLog('Stopped recording combined stream');
-                }
-
-                // Close audio context
-                if (audioContext) {
-                    await audioContext.close();
-                }
-
-                // Reset recorders and audio context
-                localRecorder = null;
-                remoteRecorder = null;
-                combinedRecorder = null;
-                audioContext = null;
-                audioDestination = null;
-
-                // Enable/disable appropriate buttons
-                document.getElementById('startRecording').disabled = false;
-                document.getElementById('stopRecording').disabled = true;
-
-            } catch (error) {
-                addLog(`Error stopping recording: ${error.message}`);
-                console.error('Stop recording error:', error);
-            }
-        }
-
-        function saveCombinedRecording(chunks) {
-            try {
-                if (chunks.length === 0) {
-                    addLog('No combined recording data available');
-                    return;
-                }
-
-                const blob = new Blob(chunks, {
-                    type: 'video/webm;codecs=vp8,opus'
-                });
-
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `combined-recording-${new Date().toISOString()}.webm`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-
-                // Clean up the URL object
-                URL.revokeObjectURL(url);
-
-                addLog('Saved combined recording with audio');
-            } catch (error) {
-                addLog(`Error saving combined recording: ${error.message}`);
-                console.error('Save recording error:', error);
-            }
-        }
-
-        // Update the button states when the call starts/ends
-        function updateRecordingButtonStates() {
-            const hasStreams = localStream && document.getElementById('remoteVideo').srcObject;
-            document.getElementById('startRecording').disabled = !hasStreams;
-            document.getElementById('stopRecording').disabled = true;
-        }
-
-
-        // let localChunk = [];
-        // let remoteChunk = [];
-        // let localRecorder, remoteRecorder;
-
-        // const startRecordingButton = document.getElementById('startRecording');
-        // const stopRecordingButton = document.getElementById('stopRecording');
-
-        // async function startRecording() {
-        //     if (localStream) {
-        //         localRecorder = new MediaRecorder(localStream);
-        //         localRecorder.ondataavailable = (event) => {
-        //             if (event.data.size > 0) {
-        //                 localChunk.push(event.data);
-        //             }
-        //         }
-        //         localRecorder.start();
-        //         addLog("local recording has started")
-        //     }
-
-        //     const remoteVideo = document.getElementById('remoteVideo');
-        //     const remoteStream = remoteVideo.srcObject;
-        //     if (remoteStream) {
-        //         remoteRecorder = new MediaRecorder(remoteStream);
-        //         remoteRecorder.ondataavailable = (event) => {
-        //             if (event.data.size > 0) {
-        //                 remoteChunk.push(event.data);
-        //             }
-        //         }
-        //         remoteRecorder.start();
-        //         addLog("remote recording has started");
-        //     }
-
-        //     startRecordingButton.disabled = true;
-        //     stopRecordingButton.disabled = false;
-        // }
-
-        // async function stopRecording() {
-        //     if (localRecorder) {
-        //         localRecorder.stop();
-        //         localRecorder.onstop = saveLocalRecording;
-        //         addLog('Stopped recording local stream');
-        //     }
-
-        //     if (remoteRecorder) {
-        //         remoteRecorder.stop();
-        //         remoteRecorder.onstop = saveRemoteRecording;
-        //         addLog('Stopped recording remote stream');
-        //     }
-
-        //     startRecordingButton.disabled = false;
-        //     stopRecordingButton.disabled = true;
-        // }
-
-        // function saveLocalRecording() {
-        //     const blob = new Blob(localChunks, { type: 'video/webm' });
-        //     localChunks = [];
-        //     const url = URL.createObjectURL(blob);
-        //     const a = document.createElement('a');
-        //     a.href = url;
-        //     a.download = `local-recording-${new Date().toISOString()}.webm`;
-        //     a.click();
-        //     addLog('Saved local recording');
-        // }
-
-        // function saveRemoteRecording() {
-        //     const blob = new Blob(remoteChunks, { type: 'video/webm' });
-        //     remoteChunks = [];
-        //     const url = URL.createObjectURL(blob);
-        //     const a = document.createElement('a');
-        //     a.href = url;
-        //     a.download = `remote-recording-${new Date().toISOString()}.webm`;
-        //     a.click();
-        //     addLog('Saved remote recording');
-        // }
-
-        let localChunks = [];
-        let remoteChunks = [];
-        let localRecorder, remoteRecorder;
-        let combinedRecorder;
-        let combinedCanvas, combinedContext;
-        let audioContext, audioDestination;
-
-        function setupCombinedCanvas() {
-            combinedCanvas = document.createElement('canvas');
-            combinedCanvas.width = 1280;  // 640 * 2
-            combinedCanvas.height = 480;
-            combinedContext = combinedCanvas.getContext('2d');
-        }
-
-        async function setupAudioMixer() {
-            audioContext = new AudioContext();
-            audioDestination = audioContext.createMediaStreamDestination();
-        }
-
-        async function startRecording() {
-            try {
-                setupCombinedCanvas();
-                await setupAudioMixer();
-
-                if (localStream) {
-                    // Add local audio to the mixer
-                    const localAudioTrack = localStream.getAudioTracks()[0];
-                    if (localAudioTrack) {
-                        const localAudioSource = audioContext.createMediaStreamSource(new MediaStream([localAudioTrack]));
-                        localAudioSource.connect(audioDestination);
-                    }
-
-                    localRecorder = new MediaRecorder(localStream, {
-                        mimeType: 'video/webm;codecs=vp8,opus'
-                    });
-
-                    localRecorder.ondataavailable = (event) => {
-                        if (event.data.size > 0) {
-                            localChunks.push(event.data);
-                        }
-                    };
-
-                    localRecorder.start(1000);
-                    addLog("Local recording started");
-                }
-
-                const remoteVideo = document.getElementById('remoteVideo');
-                const remoteStream = remoteVideo.srcObject;
-                if (remoteStream) {
-                    // Add remote audio to the mixer
-                    const remoteAudioTrack = remoteStream.getAudioTracks()[0];
-                    if (remoteAudioTrack) {
-                        const remoteAudioSource = audioContext.createMediaStreamSource(new MediaStream([remoteAudioTrack]));
-                        remoteAudioSource.connect(audioDestination);
-                    }
-
-                    remoteRecorder = new MediaRecorder(remoteStream, {
-                        mimeType: 'video/webm;codecs=vp8,opus'
-                    });
-
-                    remoteRecorder.ondataavailable = (event) => {
-                        if (event.data.size > 0) {
-                            remoteChunks.push(event.data);
-                        }
-                    };
-
-                    remoteRecorder.start(1000);
-                    addLog("Remote recording started");
+            handleWebSocketReconnection() {
+                if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                    this.reconnectAttempts++;
+                    this.addLog(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+                    setTimeout(() => this.initializeWebSocket(), this.reconnectInterval);
                 } else {
-                    addLog("Warning: No remote stream available to record");
+                    this.addLog('Failed to reconnect to server');
+                    this.updateConnectionStatus('error', 'Connection failed');
                 }
-
-                // Create a combined stream with both video and audio
-                const combinedVideoStream = combinedCanvas.captureStream(30); // 30 FPS
-                const combinedTracks = [
-                    ...combinedVideoStream.getVideoTracks(),
-                    ...audioDestination.stream.getAudioTracks()
-                ];  
-                const combinedStream = new MediaStream(combinedTracks);
-
-                combinedRecorder = new MediaRecorder(combinedStream, {
-                    mimeType: 'video/webm;codecs=vp8,opus'
-                });
-
-                const combinedChunks = [];
-                combinedRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        combinedChunks.push(event.data);
-                    }
-                };
-
-                // Start the frame composition loop
-                requestAnimationFrame(drawCombinedFrame);
-                combinedRecorder.start(1000);
-
-                document.getElementById('startRecording').disabled = true;
-                document.getElementById('stopRecording').disabled = false;
-
-                // Save the combined recording when stopped
-                combinedRecorder.onstop = () => {
-                    saveCombinedRecording(combinedChunks);
-                };
-
-            } catch (error) {
-                addLog(`Recording failed to start: ${error.message}`);
-                console.error('Recording error:', error);
             }
+
         }
 
-        function drawCombinedFrame() {
-            if (combinedRecorder && combinedRecorder.state === 'recording') {
-                // Clear the canvas
-                combinedContext.fillStyle = '#000';
-                combinedContext.fillRect(0, 0, combinedCanvas.width, combinedCanvas.height);
+        // Initialize the client
+        const webRTCClient = new WebRTCClient();
 
-                // Draw local video on the left side
-                const localVideo = document.getElementById('localVideo');
-                combinedContext.drawImage(localVideo, 0, 0, combinedCanvas.width / 2, combinedCanvas.height);
-
-                // Draw remote video on the right side
-                const remoteVideo = document.getElementById('remoteVideo');
-                combinedContext.drawImage(remoteVideo, combinedCanvas.width / 2, 0, combinedCanvas.width / 2, combinedCanvas.height);
-
-                // Continue the frame composition loop
-                requestAnimationFrame(drawCombinedFrame);
-            }
-        }
-
-        async function stopRecording() {
-            try {
-                if (localRecorder && localRecorder.state === 'recording') {
-                    localRecorder.stop();
-                    addLog('Stopped recording local stream');
-                }
-
-                if (remoteRecorder && remoteRecorder.state === 'recording') {
-                    remoteRecorder.stop();
-                    addLog('Stopped recording remote stream');
-                }
-
-                if (combinedRecorder && combinedRecorder.state === 'recording') {
-                    combinedRecorder.stop();
-                    addLog('Stopped recording combined stream');
-                }
-
-                // Close audio context
-                if (audioContext) {
-                    await audioContext.close();
-                }
-
-                // Reset recorders and audio context
-                localRecorder = null;
-                remoteRecorder = null;
-                combinedRecorder = null;
-                audioContext = null;
-                audioDestination = null;
-
-                // Enable/disable appropriate buttons
-                document.getElementById('startRecording').disabled = false;
-                document.getElementById('stopRecording').disabled = true;
-
-            } catch (error) {
-                addLog(`Error stopping recording: ${error.message}`);
-                console.error('Stop recording error:', error);
-            }
-        }
-
-        function saveCombinedRecording(chunks) {
-            try {
-                if (chunks.length === 0) {
-                    addLog('No combined recording data available');
-                    return;
-                }
-
-                const blob = new Blob(chunks, {
-                    type: 'video/webm;codecs=vp8,opus'
-                });
-
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `combined-recording-${new Date().toISOString()}.webm`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-
-                // Clean up the URL object
-                URL.revokeObjectURL(url);
-
-                addLog('Saved combined recording with audio');
-            } catch (error) {
-                addLog(`Error saving combined recording: ${error.message}`);
-                console.error('Save recording error:', error);
-            }
-        }
-
-        // Update the button states when the call starts/ends
-        function updateRecordingButtonStates() {
-            const hasStreams = localStream && document.getElementById('remoteVideo').srcObject;
-            document.getElementById('startRecording').disabled = !hasStreams;
-            document.getElementById('stopRecording').disabled = true;
-        }
-
-        document.getElementById('startButton').onclick = start;
-        document.getElementById('hangupButton').onclick = hangup;
-        document.getElementById('startRecording').onclick = startRecording;
-        document.getElementById('stopRecording').onclick = stopRecording;
     </script>
 </body>
 
