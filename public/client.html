@@ -682,6 +682,7 @@
 
                     this.resetRecordingState();
                     //this.updateRecordingUI(false);
+                    this.hideRecordingIndicators();
 
                     // Reset UI
                     document.getElementById('startRecording').disabled = false;
@@ -1225,7 +1226,6 @@
                 document.getElementById('remoteMutedIndicator').style.display = 'none';
                 document.getElementById('micButton').disabled = true;
                 document.getElementById('micButton').classList.remove('muted');
-
             }
 
             // Helper methods
