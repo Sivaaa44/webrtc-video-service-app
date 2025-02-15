@@ -50,7 +50,7 @@ The application runs in the following browsers:
 
 ---
 
-## Technical Design
+## Technical Design / Illustration
 
 ![Technical Design](image.png)
 
